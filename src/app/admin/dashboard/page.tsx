@@ -1,17 +1,95 @@
-import React from 'react'
+"use client"
+
+import React, { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { DollarSign, ShoppingCart, Package, Users, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export default function AdminDashboardPage() {
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string>('')
+    const [stats, setStats] = useState({
+        totalRevenue: 0,
+        totalOrders: 0,
+        activeProducts: 0,
+        totalCustomers: 0,
+    })
+    const [recentOrders, setRecentOrders] = useState<
+        Array<{
+            id: string
+            order_number: string
+            customer_name: string
+            customer_email: string | null
+            status: string
+            payment_status: string
+            total_amount: number
+            created_at: string
+        }>
+    >([])
+
+    useEffect(() => {
+        let cancelled = false
+
+        const run = async () => {
+            setLoading(true)
+            setError('')
+
+            try {
+                const res = await fetch('/api/admin/dashboard')
+                const json = await res.json()
+
+                if (cancelled) return
+
+                if (!res.ok || !json?.success) {
+                    setError(json?.error ?? 'Gagal memuat dashboard')
+                    setLoading(false)
+                    return
+                }
+
+                setStats({
+                    totalRevenue: Number(json.stats?.totalRevenue ?? 0),
+                    totalOrders: Number(json.stats?.totalOrders ?? 0),
+                    activeProducts: Number(json.stats?.activeProducts ?? 0),
+                    totalCustomers: Number(json.stats?.totalCustomers ?? 0),
+                })
+                setRecentOrders(Array.isArray(json.recentOrders) ? json.recentOrders : [])
+                setLoading(false)
+            } catch (e) {
+                if (cancelled) return
+                const message = e instanceof Error ? e.message : 'Gagal memuat dashboard'
+                setError(message)
+                setLoading(false)
+            }
+        }
+
+        run()
+
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
+    const revenueText = useMemo(() => {
+        return `Rp ${Math.round(stats.totalRevenue).toLocaleString('id-ID')}`
+    }, [stats.totalRevenue])
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Total Revenue" value="Rp 12.450.000" trend="+12.5%" icon={DollarSign} positive />
-                <StatCard title="Total Orders" value="148" trend="+8.2%" icon={ShoppingCart} positive />
-                <StatCard title="Active Products" value="32" trend="-2.4%" icon={Package} />
-                <StatCard title="Total Customers" value="892" trend="+18.7%" icon={Users} positive />
+                <StatCard title="Total Revenue" value={loading ? '...' : revenueText} trend={loading ? '...' : 'Realtime'} icon={DollarSign} positive />
+                <StatCard title="Total Orders" value={loading ? '...' : String(stats.totalOrders)} trend={loading ? '...' : 'Realtime'} icon={ShoppingCart} positive />
+                <StatCard title="Active Products" value={loading ? '...' : String(stats.activeProducts)} trend={loading ? '...' : 'Realtime'} icon={Package} />
+                <StatCard title="Total Customers" value={loading ? '...' : String(stats.totalCustomers)} trend={loading ? '...' : 'Realtime'} icon={Users} positive />
             </div>
+
+            {error && (
+                <Card className="border-[#f1eee9] dark:border-[#3a342a] bg-white dark:bg-[#2a241c] rounded-2xl shadow-sm">
+                    <CardContent className="py-6 text-sm text-red-600 font-semibold">
+                        {error}
+                    </CardContent>
+                </Card>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Recent Orders */}
@@ -33,20 +111,42 @@ export default function AdminDashboardPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#f1eee9] dark:divide-[#3a342a]">
-                                    {RECENT_ORDERS.map((order) => (
+                                    {loading && (
+                                        <tr>
+                                            <td colSpan={5} className="py-8 text-center text-sm text-[#8b775b]">
+                                                Loading...
+                                            </td>
+                                        </tr>
+                                    )}
+
+                                    {!loading && recentOrders.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="py-8 text-center text-sm text-[#8b775b]">
+                                                Belum ada pesanan.
+                                            </td>
+                                        </tr>
+                                    )}
+
+                                    {!loading && recentOrders.map((order) => (
                                         <tr key={order.id} className="group hover:bg-primary/5 transition-all">
-                                            <td className="py-4 font-bold text-sm">{order.id}</td>
+                                            <td className="py-4 font-bold text-sm">#{order.order_number}</td>
                                             <td className="py-4">
-                                                <p className="text-sm font-bold">{order.customer}</p>
-                                                <p className="text-xs text-[#8b775b]">{order.email}</p>
+                                                <p className="text-sm font-bold">{order.customer_name}</p>
+                                                <p className="text-xs text-[#8b775b]">{order.customer_email ?? '-'}</p>
                                             </td>
                                             <td className="py-4">
-                                                <Badge className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border-none",
-                                                    order.status === 'Paid' ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700")}>
+                                                <Badge
+                                                    className={cn(
+                                                        "text-[10px] font-bold px-2 py-0.5 rounded-full border-none",
+                                                        String(order.payment_status).toLowerCase() === 'paid'
+                                                            ? "bg-green-100 text-green-700"
+                                                            : "bg-amber-100 text-amber-700"
+                                                    )}
+                                                >
                                                     {order.status}
                                                 </Badge>
                                             </td>
-                                            <td className="py-4 font-bold text-sm">Rp {order.total.toLocaleString()}</td>
+                                            <td className="py-4 font-bold text-sm">Rp {Number(order.total_amount ?? 0).toLocaleString('id-ID')}</td>
                                             <td className="py-4 text-right">
                                                 <button aria-label="View order details" className="p-2 hover:bg-white dark:hover:bg-[#1e1a14] rounded-lg transition-all text-[#8b775b]">
                                                     <ArrowUpRight className="w-4 h-4" />
@@ -110,15 +210,6 @@ function StatCard({ title, value, trend, icon: Icon, positive }: StatCardProps) 
         </Card>
     )
 }
-
-import { cn } from '@/lib/utils'
-
-const RECENT_ORDERS = [
-    { id: '#WO-240501A', customer: 'Budi Santoso', email: 'budi@gmail.com', status: 'Paid', total: 245000 },
-    { id: '#WO-240502B', customer: 'Siti Aminah', email: 'siti.a@yahoo.com', status: 'Pending', total: 120000 },
-    { id: '#WO-240503C', customer: 'Andi Wijaya', email: 'andi_w@outlook.com', status: 'Paid', total: 450000 },
-    { id: '#WO-240504D', customer: 'Diana Lestari', email: 'diana@email.com', status: 'Paid', total: 85000 },
-]
 
 const BEST_SELLERS_ADMIN = [
     { name: 'Nastar Wisman', sales: 124, growth: 12 },

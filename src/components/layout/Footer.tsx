@@ -1,10 +1,41 @@
-import React from 'react'
+'use client'
+
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ShoppingBasket, Mail, Phone, MapPin, Globe, MessageCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
 export function Footer() {
+    const [storeName, setStoreName] = useState('Bakery Umi')
+    const [storeEmail, setStoreEmail] = useState('')
+
+    useEffect(() => {
+        let cancelled = false
+
+        const run = async () => {
+            try {
+                const res = await fetch('/api/settings')
+                const json = await res.json()
+                if (!res.ok || !json?.success) return
+                if (cancelled) return
+
+                const name = String(json?.settings?.store_name ?? '').trim()
+                const email = String(json?.settings?.store_email ?? '').trim()
+                if (name) setStoreName(name)
+                if (email) setStoreEmail(email)
+            } catch {
+                // ignore
+            }
+        }
+
+        run()
+
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
     return (
         <footer className="bg-white dark:bg-background-dark border-t border-gray-100 dark:border-white/5 py-16 px-6 lg:px-20 mt-20">
             <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
@@ -13,7 +44,7 @@ export function Footer() {
                         <div className="bg-primary p-1.5 rounded-lg text-white">
                             <ShoppingBasket className="w-5 h-5" />
                         </div>
-                        <h1 className="text-deep-brown dark:text-white text-xl font-extrabold">Warm Oven</h1>
+                        <h1 className="text-deep-brown dark:text-white text-xl font-extrabold">{storeName}</h1>
                     </div>
                     <p className="text-sm text-gray-500 leading-relaxed">
                         Crafting small-batch baked goods with love and the finest ingredients since 2021. Home-baked, heart-delivered.
@@ -47,11 +78,11 @@ export function Footer() {
                         </li>
                         <li className="flex items-center gap-3">
                             <Phone className="text-primary w-5 h-5 shrink-0" />
-                            <span>+62 812 3456 7890</span>
+                            <span>+62 899-6853-721</span>
                         </li>
                         <li className="flex items-center gap-3">
                             <Mail className="text-primary w-5 h-5 shrink-0" />
-                            <span>hello@warmoven.id</span>
+                            <span>{storeEmail}</span>
                         </li>
                     </ul>
                 </div>
@@ -73,7 +104,7 @@ export function Footer() {
             </div>
 
             <div className="max-w-7xl mx-auto border-t border-gray-100 dark:border-white/5 mt-16 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-                <p className="text-xs text-gray-400">© 2024 Warm Oven Bakery. All rights reserved.</p>
+                <p className="text-xs text-gray-400">© 2024 {storeName}. All rights reserved.</p>
                 <div className="flex gap-8">
                     <Link href="/privacy" className="text-xs text-gray-400 hover:text-primary">Privacy Policy</Link>
                     <Link href="/terms" className="text-xs text-gray-400 hover:text-primary">Terms of Service</Link>

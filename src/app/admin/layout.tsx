@@ -2,18 +2,35 @@
 
 import React from 'react'
 import Link from 'next/link'
-import { LayoutDashboard, ShoppingBag, Users, Settings, LogOut, Package, PieChart } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, Users, Settings, LogOut, Package, PieChart, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase-client'
+import { toast } from 'sonner'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
+    const router = useRouter()
+    const supabase = createClient()
+
+    const handleLogout = async () => {
+        try {
+            const { error } = await supabase.auth.signOut()
+            if (error) throw error
+            toast.success('Logout berhasil')
+            router.push('/login')
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Gagal logout'
+            toast.error(message)
+        }
+    }
 
     const navItems = [
         { label: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
         { label: 'Orders', icon: ShoppingBag, href: '/admin/orders' },
         { label: 'Products', icon: Package, href: '/admin/products' },
         { label: 'Customers', icon: Users, href: '/admin/customers' },
+        { label: 'Reviews', icon: Star, href: '/admin/reviews' },
         { label: 'Analytics', icon: PieChart, href: '/admin/analytics' },
         { label: 'Settings', icon: Settings, href: '/admin/settings' },
     ]
@@ -44,7 +61,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     })}
                 </nav>
                 <div className="p-4 border-t border-[#f1eee9] dark:border-[#3a342a]">
-                    <button className="flex items-center gap-3 px-4 py-3 w-full text-red-500 font-bold hover:bg-red-50/50 rounded-xl transition-all">
+                    <button
+                        onClick={handleLogout}
+                        className="flex items-center gap-3 px-4 py-3 w-full text-red-500 font-bold hover:bg-red-50/50 rounded-xl transition-all"
+                    >
                         <LogOut className="w-5 h-5" />
                         Logout
                     </button>

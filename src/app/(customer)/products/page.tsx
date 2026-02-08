@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { ProductCard } from '@/components/product/ProductCard'
 import { Button } from '@/components/ui/button'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
@@ -11,9 +11,122 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+
+interface CatalogProduct {
+    id: string
+    name: string
+    slug: string
+    description: string | null
+    base_price: number
+    featured_image: string | null
+    rating_average: number | null
+    is_pre_order: boolean | null
+}
+
+interface CatalogCategory {
+    id: string
+    name: string
+    slug: string
+}
 
 export default function ProductsPage() {
-    const [selectedCategory, setSelectedCategory] = useState('All')
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    const categorySlug = searchParams.get('category') ?? 'all'
+    const availability = searchParams.get('availability') ?? 'all'
+    const sort = searchParams.get('sort') ?? 'newest'
+
+    const [products, setProducts] = useState<CatalogProduct[]>([])
+    const [categories, setCategories] = useState<CatalogCategory[]>([])
+
+    useEffect(() => {
+        const fetchCategories = async () => {
+            const { data, error } = await supabase
+                .from('categories')
+                .select('id, name, slug')
+                .eq('is_active', true)
+                .order('display_order', { ascending: true })
+
+            if (error) {
+                console.error('[ProductsPage] fetchCategories error', error)
+                return
+            }
+
+            setCategories(Array.isArray(data) ? data : [])
+        }
+
+        fetchCategories()
+    }, [])
+
+    useEffect(() => {
+        const fetchProducts = async () => {
+            let query = supabase
+                .from('products')
+                .select(
+                    'id, name, slug, description, base_price, featured_image, rating_average, is_pre_order, category:categories!products_category_id_fkey(slug)'
+                )
+                .eq('is_active', true)
+
+            if (availability === 'preorder') {
+                query = query.eq('is_pre_order', true)
+            } else if (availability === 'available') {
+                query = query.eq('is_pre_order', false)
+            }
+
+            if (categorySlug !== 'all') {
+                query = query.eq('categories.slug', categorySlug)
+            }
+
+            if (sort === 'price_low') {
+                query = query.order('base_price', { ascending: true })
+            } else if (sort === 'price_high') {
+                query = query.order('base_price', { ascending: false })
+            } else if (sort === 'best') {
+                query = query.order('order_count', { ascending: false })
+            } else {
+                query = query.order('created_at', { ascending: false })
+            }
+
+            const { data, error } = await query
+
+            if (error) {
+                console.error('[ProductsPage] fetchProducts error', { categorySlug, error })
+                return
+            }
+
+            setProducts(Array.isArray(data) ? (data as any) : [])
+        }
+
+        fetchProducts()
+    }, [availability, categorySlug, sort])
+
+    const setCategorySlug = (next: string) => {
+        const params = new URLSearchParams(searchParams.toString())
+        if (next === 'all') params.delete('category')
+        else params.set('category', next)
+        router.push(`/products?${params.toString()}`)
+    }
+
+    const setAvailability = (next: string) => {
+        const params = new URLSearchParams(searchParams.toString())
+        if (next === 'all') params.delete('availability')
+        else params.set('availability', next)
+        router.push(`/products?${params.toString()}`)
+    }
+
+    const setSort = (next: string) => {
+        const params = new URLSearchParams(searchParams.toString())
+        if (next === 'newest') params.delete('sort')
+        else params.set('sort', next)
+        router.push(`/products?${params.toString()}`)
+    }
+
+    const clearAllFilters = () => {
+        router.push('/products')
+    }
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -32,7 +145,7 @@ export default function ProductsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider text-xs">Sort by:</span>
-                    <Select defaultValue="newest">
+                    <Select value={sort} onValueChange={setSort}>
                         <SelectTrigger className="w-[180px] bg-white dark:bg-surface-dark border-slate-200 dark:border-slate-800 rounded-lg">
                             <SelectValue placeholder="Sort by" />
                         </SelectTrigger>
@@ -53,16 +166,25 @@ export default function ProductsPage() {
                     <div>
                         <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white mb-4">Category</h3>
                         <div className="space-y-2">
-                            {CATEGORIES.map((cat) => (
-                                <label key={cat.name} className="flex items-center gap-3 cursor-pointer group">
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <input
+                                    type="radio"
+                                    checked={categorySlug === 'all'}
+                                    onChange={() => setCategorySlug('all')}
+                                    className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary"
+                                />
+                                <span className="text-slate-700 dark:text-slate-300 group-hover:text-primary transition-colors">All</span>
+                            </label>
+
+                            {categories.map((cat) => (
+                                <label key={cat.id} className="flex items-center gap-3 cursor-pointer group">
                                     <input
-                                        type="checkbox"
-                                        checked={selectedCategory === cat.name}
-                                        onChange={() => setSelectedCategory(cat.name)}
+                                        type="radio"
+                                        checked={categorySlug === cat.slug}
+                                        onChange={() => setCategorySlug(cat.slug)}
                                         className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary"
                                     />
                                     <span className="text-slate-700 dark:text-slate-300 group-hover:text-primary transition-colors">{cat.name}</span>
-                                    <span className="ml-auto text-xs text-slate-400">{cat.count}</span>
                                 </label>
                             ))}
                         </div>
@@ -88,16 +210,40 @@ export default function ProductsPage() {
                     <div>
                         <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white mb-4">Availability</h3>
                         <div className="space-y-3">
-                            {['Available Now', 'Pre-Order Only', 'All Items'].map((label) => (
-                                <label key={label} className="flex items-center gap-3 cursor-pointer">
-                                    <input type="radio" name="availability" className="w-5 h-5 text-primary border-slate-300 focus:ring-primary" />
-                                    <span className="text-slate-700 dark:text-slate-300">{label}</span>
-                                </label>
-                            ))}
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name="availability"
+                                    checked={availability === 'available'}
+                                    onChange={() => setAvailability('available')}
+                                    className="w-5 h-5 text-primary border-slate-300 focus:ring-primary"
+                                />
+                                <span className="text-slate-700 dark:text-slate-300">Available Now</span>
+                            </label>
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name="availability"
+                                    checked={availability === 'preorder'}
+                                    onChange={() => setAvailability('preorder')}
+                                    className="w-5 h-5 text-primary border-slate-300 focus:ring-primary"
+                                />
+                                <span className="text-slate-700 dark:text-slate-300">Pre-Order Only</span>
+                            </label>
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name="availability"
+                                    checked={availability === 'all'}
+                                    onChange={() => setAvailability('all')}
+                                    className="w-5 h-5 text-primary border-slate-300 focus:ring-primary"
+                                />
+                                <span className="text-slate-700 dark:text-slate-300">All Items</span>
+                            </label>
                         </div>
                     </div>
 
-                    <Button variant="outline" className="w-full py-6 border-2 border-primary text-primary hover:bg-primary hover:text-white font-bold rounded-xl transition-all duration-200">
+                    <Button onClick={clearAllFilters} variant="outline" className="w-full py-6 border-2 border-primary text-primary hover:bg-primary hover:text-white font-bold rounded-xl transition-all duration-200">
                         Clear All Filters
                     </Button>
                 </aside>
@@ -105,8 +251,21 @@ export default function ProductsPage() {
                 {/* Product Grid */}
                 <div className="flex-1">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {DUMMY_PRODUCTS.map((p) => (
-                            <ProductCard key={p.id} product={p} />
+                        {products.map((p) => (
+                            <ProductCard
+                                key={p.id}
+                                product={{
+                                    id: p.id,
+                                    name: p.name,
+                                    slug: p.slug,
+                                    price: p.base_price,
+                                    description: p.description ?? '',
+                                    image: p.featured_image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=1000',
+                                    badge: undefined,
+                                    rating: p.rating_average ?? 5,
+                                    isPreOrder: p.is_pre_order ?? true,
+                                }}
+                            />
                         ))}
                     </div>
 
@@ -131,54 +290,3 @@ export default function ProductsPage() {
         </div>
     )
 }
-
-import Link from 'next/link'
-
-const CATEGORIES = [
-    { name: 'Breads', count: 14 },
-    { name: 'Cookies', count: 12 },
-    { name: 'Brownies', count: 8 },
-    { name: 'Pizzas', count: 6 },
-]
-
-const DUMMY_PRODUCTS = [
-    {
-        id: '1',
-        name: 'Country Sourdough Loaf',
-        price: 45000,
-        description: 'Naturally leavened, 48hr fermented',
-        image: 'https://images.unsplash.com/photo-1585478259715-876acc5be8eb?q=80&w=1000',
-        badge: 'Best Seller',
-        rating: 4.9,
-        isPreOrder: false
-    },
-    {
-        id: '2',
-        name: 'Double Choc Sea Salt',
-        price: 18000,
-        description: '6-pack jumbo bakery cookies',
-        image: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?q=80&w=1000',
-        rating: 5.0,
-        isPreOrder: true
-    },
-    {
-        id: '3',
-        name: 'Fudge Walnut Brownies',
-        price: 70000,
-        description: 'Dense, fudgy, and decadent',
-        image: 'https://images.unsplash.com/photo-1464349095431-e9a21285b5f3?q=80&w=1000',
-        rating: 4.8,
-        isPreOrder: false
-    },
-    {
-        id: '4',
-        name: 'Wood-fired Margherita',
-        price: 50000,
-        description: 'San Marzano & fresh buffalo mozza',
-        image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=1000',
-        badge: 'Best Seller',
-        rating: 4.9,
-        isPreOrder: true
-    },
-    // Add more if needed
-]

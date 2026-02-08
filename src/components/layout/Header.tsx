@@ -11,14 +11,41 @@ import { cn } from '@/lib/utils'
 export function Header() {
     const [isScrolled, setIsScrolled] = useState(false)
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+    const [mounted, setMounted] = useState(false)
+    const [storeName, setStoreName] = useState('Warm Oven')
     const totalItems = useCartStore((state) => state.getTotalItems())
 
     useEffect(() => {
+        setMounted(true)
         const handleScroll = () => {
             setIsScrolled(window.scrollY > 0)
         }
         window.addEventListener('scroll', handleScroll)
         return () => window.removeEventListener('scroll', handleScroll)
+    }, [])
+
+    useEffect(() => {
+        let cancelled = false
+
+        const run = async () => {
+            try {
+                const res = await fetch('/api/settings')
+                const json = await res.json()
+                if (!res.ok || !json?.success) return
+                if (cancelled) return
+
+                const name = String(json?.settings?.store_name ?? '').trim()
+                if (name) setStoreName(name)
+            } catch {
+                // ignore
+            }
+        }
+
+        run()
+
+        return () => {
+            cancelled = true
+        }
     }, [])
 
     return (
@@ -38,7 +65,7 @@ export function Header() {
                             <ShoppingBasket className="w-6 h-6" />
                         </div>
                         <h1 className="text-deep-brown dark:text-white text-xl font-extrabold tracking-tight">
-                            Warm Oven
+                            {storeName}
                         </h1>
                     </Link>
 
@@ -71,16 +98,19 @@ export function Header() {
 
                     {/* Cart */}
                     <Button
+                        asChild
                         variant="ghost"
                         size="icon"
                         className="relative bg-[#f1eee9] dark:bg-white/5 rounded-xl text-deep-brown dark:text-white hover:bg-primary/10 transition-colors"
                     >
-                        <ShoppingBasket className="w-5 h-5" />
-                        {totalItems > 0 && (
-                            <span className="absolute -top-1 -right-1 bg-terracotta text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                                {totalItems}
-                            </span>
-                        )}
+                        <Link href="/cart" aria-label="Keranjang">
+                            <ShoppingBasket className="w-5 h-5" />
+                            {mounted && totalItems > 0 && (
+                                <span className="absolute -top-1 -right-1 bg-terracotta text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                    {totalItems}
+                                </span>
+                            )}
+                        </Link>
                     </Button>
 
                     {/* Profile */}

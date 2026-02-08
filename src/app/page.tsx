@@ -1,5 +1,3 @@
-'use client'
-
 import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -7,8 +5,60 @@ import { ArrowRight, ShoppingCart, ChevronLeft, ChevronRight } from 'lucide-reac
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
+import { createClient } from '@supabase/supabase-js'
 
-export default function HomePage() {
+type Category = {
+  id: string
+  name: string
+  slug: string
+  image_url: string | null
+}
+
+type BestSeller = {
+  id: string
+  name: string
+  slug: string
+  base_price: number
+  description: string | null
+  featured_image: string | null
+  is_pre_order: boolean
+}
+
+function supabaseServer() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !anonKey) {
+    throw new Error('Missing SUPABASE env vars (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY).')
+  }
+
+  return createClient(supabaseUrl, anonKey, { auth: { persistSession: false } })
+}
+
+function fallbackImage() {
+  return 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1200&q=80'
+}
+
+export default async function HomePage() {
+  const supabase = supabaseServer()
+
+  const [{ data: categoriesData }, { data: bestSellersData }] = await Promise.all([
+    supabase
+      .from('categories')
+      .select('id, name, slug, image_url')
+      .eq('is_active', true)
+      .order('display_order', { ascending: true }),
+    supabase
+      .from('products')
+      .select('id, name, slug, base_price, description, featured_image, is_pre_order, rating_average')
+      .eq('is_active', true)
+      .order('rating_average', { ascending: false })
+      .limit(3),
+  ])
+
+  const categories: Category[] = Array.isArray(categoriesData) ? (categoriesData as any) : []
+  const bestSellers: BestSeller[] = Array.isArray(bestSellersData) ? (bestSellersData as any) : []
+
   return (
     <div className="max-w-7xl mx-auto px-6 lg:px-20 overflow-hidden">
       {/* Hero Section */}
@@ -29,11 +79,11 @@ export default function HomePage() {
               Artisanal sourdough, fudgy brownies, and handmade pizza baked fresh in our home kitchen. Limited batches available weekly.
             </p>
             <div className="flex flex-wrap gap-4">
-              <Button size="lg" className="bg-primary hover:bg-primary/90 text-white px-8 py-6 rounded-xl font-bold text-lg shadow-lg shadow-primary/20 transition-all hover:-translate-y-1">
-                Order Now
+              <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-white px-8 py-6 rounded-xl font-bold text-lg shadow-lg shadow-primary/20 transition-all hover:-translate-y-1">
+                <Link href="/products">Order Now</Link>
               </Button>
-              <Button size="lg" variant="outline" className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 px-8 py-6 rounded-xl font-bold text-lg hover:bg-gray-50 transition-colors">
-                View Menu
+              <Button asChild size="lg" variant="outline" className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 px-8 py-6 rounded-xl font-bold text-lg hover:bg-gray-50 transition-colors">
+                <Link href="/products">View Menu</Link>
               </Button>
             </div>
           </div>
@@ -41,7 +91,7 @@ export default function HomePage() {
             <div className="absolute inset-0 bg-primary/10 rounded-3xl -rotate-3"></div>
             <div className="relative w-full h-full rounded-3xl shadow-2xl overflow-hidden border-8 border-white dark:border-white/10">
               <Image
-                src="https://images.unsplash.com/photo-1540331547168-8b63109228b7?q=80&w=1000&auto=format&fit=crop"
+                src={bestSellers[0]?.featured_image || fallbackImage()}
                 alt="Fresh sourdough bread and brownies"
                 fill
                 className="object-cover"
@@ -50,9 +100,11 @@ export default function HomePage() {
               <div className="absolute bottom-6 left-6 right-6 bg-white/90 dark:bg-black/80 backdrop-blur-sm p-4 rounded-xl flex items-center justify-between">
                 <div>
                   <p className="text-xs font-bold text-primary uppercase">Our Favorite</p>
-                  <p className="font-bold">Signature Chocolate Brownie</p>
+                  <p className="font-bold">{bestSellers[0]?.name ?? 'Bakery Umi'}</p>
                 </div>
-                <span className="text-primary font-bold">Rp 85.000</span>
+                <span className="text-primary font-bold">
+                  {bestSellers[0]?.base_price ? `Rp ${Number(bestSellers[0]?.base_price).toLocaleString('id-ID')}` : ''}
+                </span>
               </div>
             </div>
           </div>
@@ -71,10 +123,14 @@ export default function HomePage() {
           </Link>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-          {categories.map((cat, idx) => (
-            <div key={idx} className="group relative aspect-square rounded-2xl overflow-hidden cursor-pointer">
+          {categories.map((cat) => (
+            <Link
+              key={cat.id}
+              href={`/products?category=${encodeURIComponent(cat.slug)}`}
+              className="group relative aspect-square rounded-2xl overflow-hidden cursor-pointer block"
+            >
               <Image
-                src={cat.image}
+                src={(cat as any).image_url || fallbackImage()}
                 alt={cat.name}
                 fill
                 className="object-cover transition-transform duration-500 group-hover:scale-110"
@@ -82,9 +138,9 @@ export default function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
               <div className="absolute bottom-6 left-6 text-white">
                 <h4 className="font-bold text-xl mb-1">{cat.name}</h4>
-                <p className="opacity-70 text-sm">{cat.tagline}</p>
+                <p className="opacity-70 text-sm">View products</p>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </section>
@@ -103,28 +159,32 @@ export default function HomePage() {
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {bestSellers.map((product, idx) => (
-            <Card key={idx} className="bg-white dark:bg-white/5 p-4 rounded-2xl shadow-sm hover:shadow-xl transition-all group border-none">
-              <div className="relative rounded-xl overflow-hidden aspect-[4/3] mb-4">
-                <Image
-                  src={product.image}
-                  alt={product.name}
-                  fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                {product.badge && (
-                  <Badge className="absolute top-3 left-3 bg-terracotta text-white border-none">
-                    {product.badge}
-                  </Badge>
-                )}
-              </div>
-              <h5 className="font-bold text-lg mb-1">{product.name}</h5>
-              <p className="text-sm text-gray-500 mb-4 line-clamp-2">{product.description}</p>
+          {bestSellers.map((product) => (
+            <Card key={product.id} className="bg-white dark:bg-white/5 p-4 rounded-2xl shadow-sm hover:shadow-xl transition-all group border-none">
+              <Link href={`/products/${encodeURIComponent(product.slug)}`} className="block">
+                <div className="relative rounded-xl overflow-hidden aspect-[4/3] mb-4">
+                  <Image
+                    src={product.featured_image || fallbackImage()}
+                    alt={product.name}
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  {(product.is_pre_order) && (
+                    <Badge className="absolute top-3 left-3 bg-terracotta text-white border-none">
+                      PRE-ORDER
+                    </Badge>
+                  )}
+                </div>
+                <h5 className="font-bold text-lg mb-1">{product.name}</h5>
+                <p className="text-sm text-gray-500 mb-4 line-clamp-2">{product.description ?? ''}</p>
+              </Link>
               <div className="flex items-center justify-between mt-auto">
-                <span className="text-xl font-extrabold text-primary">Rp {product.price.toLocaleString()}</span>
-                <Button className="bg-primary text-white p-2 rounded-lg flex items-center gap-2 hover:bg-primary/90">
-                  <ShoppingCart className="w-4 h-4" />
-                  <span className="text-xs font-bold">Add</span>
+                <span className="text-xl font-extrabold text-primary">Rp {Number(product.base_price ?? 0).toLocaleString()}</span>
+                <Button asChild className="bg-primary text-white p-2 rounded-lg flex items-center gap-2 hover:bg-primary/90">
+                  <Link href={`/products/${encodeURIComponent(product.slug)}`}>
+                    <ShoppingCart className="w-4 h-4" />
+                    <span className="text-xs font-bold">View</span>
+                  </Link>
                 </Button>
               </div>
             </Card>
@@ -134,33 +194,3 @@ export default function HomePage() {
     </div>
   )
 }
-
-const categories = [
-  { name: 'Kue Kering', tagline: 'Crunchy & Sweet', image: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?q=80&w=1000' },
-  { name: 'Brownies', tagline: 'Fudgy & Rich', image: 'https://images.unsplash.com/photo-1464349095431-e9a21285b5f3?q=80&w=1000' },
-  { name: 'Roti', tagline: 'Soft & Fluffy', image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1000' },
-  { name: 'Pizza', tagline: 'Hot & Cheesy', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=1000' },
-]
-
-const bestSellers = [
-  {
-    name: 'Artisan Sourdough Loaf',
-    price: 45000,
-    badge: 'MUST TRY',
-    description: 'Fermented for 24 hours for the perfect tangy flavor and crunchy crust.',
-    image: 'https://images.unsplash.com/photo-1585478259715-876acc5be8eb?q=80&w=1000'
-  },
-  {
-    name: 'Sea Salt Dark Brownies',
-    price: 75000,
-    description: 'Rich Belgian chocolate with a sprinkle of Maldon sea salt flakes.',
-    image: 'https://images.unsplash.com/photo-1530610476181-d834309647bb?q=80&w=1000'
-  },
-  {
-    name: 'Sticky Cinnamon Rolls',
-    price: 65000,
-    badge: 'POPULAR',
-    description: 'Pack of 4 rolls with thick cream cheese frosting and organic cinnamon.',
-    image: 'https://images.unsplash.com/photo-1509365465985-25d11c17e812?q=80&w=1000'
-  },
-]

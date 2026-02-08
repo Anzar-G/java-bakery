@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { ProductGallery } from '@/components/product/ProductGallery'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -9,24 +9,194 @@ import { Star, ShoppingBasket, Plus, Minus, ShieldCheck, Clock, CheckCircle, Inf
 import { useCartStore } from '@/store/useCartStore'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+import { cn } from '@/lib/utils'
+
+type ProductImage = {
+    image_url: string
+    alt_text: string | null
+    display_order: number | null
+    is_primary: boolean | null
+}
+
+type ProductVariant = {
+    id: string
+    name: string
+    price_adjustment: number | null
+    is_active: boolean | null
+    display_order: number | null
+}
+
+type ProductDetail = {
+    id: string
+    name: string
+    slug: string
+    description: string | null
+    base_price: number
+    featured_image: string | null
+    rating_average: number | null
+    review_count: number | null
+    is_pre_order: boolean | null
+    pre_order_days: number | null
+    shipping_local_only: boolean | null
+    category: { name: string; slug: string } | null
+    images: ProductImage[]
+    variants: ProductVariant[]
+}
+
+function generateWhatsAppLink(params: {
+    phoneNumber: string
+    productName: string
+    variantName?: string
+    quantity: number
+    unitPrice: number
+}) {
+    let message = `Halo, saya ingin pre-order:%0A%0A`
+    message += `Produk: ${params.productName}%0A`
+    if (params.variantName) message += `Varian: ${params.variantName}%0A`
+    message += `Jumlah: ${params.quantity}%0A`
+    message += `Harga/pcs: Rp${params.unitPrice.toLocaleString('id-ID')}%0A%0A`
+    message += `Boleh info detail & jadwal pickup/delivery ya. Terima kasih!`
+
+    return `https://wa.me/${params.phoneNumber}?text=${message}`
+}
 
 export default function ProductDetailPage() {
+    const params = useParams<{ slug: string }>()
+    const slug = typeof params?.slug === 'string' ? params.slug : Array.isArray(params?.slug) ? params.slug[0] : ''
     const [quantity, setQuantity] = useState(1)
-    const [selectedVariant, setSelectedVariant] = useState(PRODUCT.variants[0])
+    const [loading, setLoading] = useState(true)
+    const [product, setProduct] = useState<ProductDetail | null>(null)
+    const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null)
     const addItem = useCartStore((state) => state.addItem)
 
+    useEffect(() => {
+        let cancelled = false
+
+        const fetchProduct = async () => {
+            if (!slug) {
+                setProduct(null)
+                setLoading(false)
+                return
+            }
+
+            setLoading(true)
+
+            const { data, error } = await supabase
+                .from('products')
+                .select(
+                    `
+                    id,
+                    name,
+                    slug,
+                    description,
+                    base_price,
+                    featured_image,
+                    rating_average,
+                    review_count,
+                    is_pre_order,
+                    pre_order_days,
+                    shipping_local_only,
+                    category:categories!products_category_id_fkey(name, slug),
+                    images:product_images(image_url, alt_text, display_order, is_primary),
+                    variants:product_variants(id, name, price_adjustment, is_active, display_order)
+                    `
+                )
+                .eq('slug', slug)
+                .maybeSingle()
+
+            if (cancelled) return
+
+            if (error) {
+                console.error('[ProductDetailPage] fetchProduct error', { slug, error })
+            }
+
+            if (!data) {
+                setProduct(null)
+                setLoading(false)
+                return
+            }
+
+            const normalized: ProductDetail = {
+                ...(data as any),
+                category: (data as any).category && Array.isArray((data as any).category) ? (data as any).category[0] ?? null : ((data as any).category ?? null),
+                images: Array.isArray((data as any).images) ? (data as any).images : [],
+                variants: Array.isArray((data as any).variants) ? (data as any).variants : [],
+            }
+
+            normalized.images.sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+            normalized.variants.sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+
+            setProduct(normalized)
+            setSelectedVariantId(normalized.variants?.[0]?.id ?? null)
+            setLoading(false)
+
+            await supabase
+                .from('products')
+                .update({ view_count: (data as any).view_count ? (data as any).view_count + 1 : 1 })
+                .eq('id', data.id)
+        }
+
+        fetchProduct()
+
+        return () => {
+            cancelled = true
+        }
+    }, [slug])
+
+    const selectedVariant = useMemo(() => {
+        if (!product?.variants?.length) return null
+        return product.variants.find((v) => v.id === selectedVariantId) ?? product.variants[0]
+    }, [product, selectedVariantId])
+
+    const galleryImages = useMemo(() => {
+        if (!product) return []
+        if (product.images?.length) {
+            return product.images.map((img) => ({
+                url: img.image_url,
+                alt: img.alt_text ?? product.name,
+            }))
+        }
+
+        if (product.featured_image) {
+            return [{ url: product.featured_image, alt: product.name }]
+        }
+
+        return [{ url: 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=1000', alt: product.name }]
+    }, [product])
+
+    const unitPrice = useMemo(() => {
+        if (!product) return 0
+        const adjustment = selectedVariant?.price_adjustment ?? 0
+        return product.base_price + Number(adjustment)
+    }, [product, selectedVariant])
+
     const handleAddToCart = () => {
+        if (!product) return
+
         addItem({
             id: Math.random().toString(36).substr(2, 9),
-            productId: PRODUCT.id,
-            variantId: selectedVariant.id,
-            name: PRODUCT.name,
-            variantName: selectedVariant.name,
-            price: PRODUCT.basePrice + selectedVariant.priceAdjustment,
+            productId: product.id,
+            variantId: selectedVariant?.id,
+            name: product.name,
+            variantName: selectedVariant?.name,
+            price: unitPrice,
             quantity,
-            image: PRODUCT.images[0].url,
+            image: galleryImages[0]?.url,
         })
         toast.success(`Ditambahkan ke keranjang!`)
+    }
+
+    const handleBuyNow = () => {
+        if (!product) return
+        const params = new URLSearchParams({
+            mode: 'now',
+            productId: product.id,
+            qty: String(quantity),
+        })
+        if (selectedVariant?.id) params.set('variantId', selectedVariant.id)
+        window.location.href = `/checkout?${params.toString()}`
     }
 
     return (
@@ -35,15 +205,36 @@ export default function ProductDetailPage() {
             <nav className="flex items-center gap-2 text-sm text-slate-500 mb-8 overflow-x-auto whitespace-nowrap">
                 <Link href="/" className="hover:text-primary">Home</Link>
                 <Plus className="w-3 h-3 rotate-45" />
-                <Link href="/products" className="hover:text-primary">Cookies</Link>
+                <Link
+                    href={product?.category?.slug ? `/products?category=${product.category.slug}` : '/products'}
+                    className="hover:text-primary"
+                >
+                    {loading ? 'Produk' : product?.category?.name ?? 'Produk'}
+                </Link>
                 <Plus className="w-3 h-3 rotate-45" />
-                <span className="text-slate-900 dark:text-slate-100 font-medium">{PRODUCT.name}</span>
+                <span className="text-slate-900 dark:text-slate-100 font-medium">
+                    {loading ? 'Loading...' : product?.name ?? 'Produk tidak ditemukan'}
+                </span>
             </nav>
 
+            {!loading && !product && (
+                <div className="py-16">
+                    <h1 className="text-2xl font-bold">Produk tidak ditemukan</h1>
+                    <p className="text-slate-500 mt-2">Coba balik ke katalog.</p>
+                    <div className="mt-6">
+                        <Button asChild>
+                            <Link href="/products">Kembali ke Katalog</Link>
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            {product && (
+            <>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
                 {/* Gallery */}
                 <div className="lg:col-span-7">
-                    <ProductGallery images={PRODUCT.images} />
+                    <ProductGallery images={galleryImages} />
                 </div>
 
                 {/* Info */}
@@ -51,41 +242,44 @@ export default function ProductDetailPage() {
                     <div>
                         <div className="flex items-center gap-3 mb-4">
                             <Badge className="bg-primary/20 text-primary text-xs font-bold rounded-full tracking-wide border-none px-3 py-1">
-                                PRE-ORDER REQUIRED
+                                {product.is_pre_order ? 'PRE-ORDER REQUIRED' : 'READY'}
                             </Badge>
                             <div className="flex items-center gap-1 text-yellow-500">
                                 <Star className="w-4 h-4 fill-current" />
-                                <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{PRODUCT.rating} ({PRODUCT.reviewCount} Reviews)</span>
+                                <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                    {(product.rating_average ?? 0).toFixed(1)} ({product.review_count ?? 0} Reviews)
+                                </span>
                             </div>
                         </div>
-                        <h2 className="text-4xl font-extrabold text-slate-900 dark:text-slate-100 leading-tight mb-2">{PRODUCT.name}</h2>
-                        <p className="text-slate-500 dark:text-slate-400">{PRODUCT.description}</p>
+                        <h2 className="text-4xl font-extrabold text-slate-900 dark:text-slate-100 leading-tight mb-2">{product.name}</h2>
+                        <p className="text-slate-500 dark:text-slate-400">{product.description}</p>
                     </div>
 
                     <div className="border-y border-slate-100 dark:border-slate-800 py-6">
-                        <span className="text-3xl font-bold text-primary">Rp {(PRODUCT.basePrice + selectedVariant.priceAdjustment).toLocaleString()}</span>
-                        {selectedVariant.oldPrice && (
-                            <span className="ml-2 text-sm text-slate-400 line-through">Rp {selectedVariant.oldPrice.toLocaleString()}</span>
-                        )}
+                        <span className="text-3xl font-bold text-primary">Rp {unitPrice.toLocaleString('id-ID')}</span>
                     </div>
 
                     {/* Variations */}
                     <div className="space-y-4">
                         <p className="text-sm font-bold uppercase tracking-wider text-slate-500">Select Size</p>
                         <div className="flex flex-wrap gap-3">
-                            {PRODUCT.variants.map((v) => (
-                                <Button
-                                    key={v.id}
-                                    variant={selectedVariant.id === v.id ? 'default' : 'outline'}
-                                    onClick={() => setSelectedVariant(v)}
-                                    className={cn(
-                                        "px-5 py-6 rounded-xl border-2 font-bold transition-all",
-                                        selectedVariant.id === v.id ? "border-primary bg-primary/5 text-primary" : "border-slate-200 dark:border-slate-700 hover:border-primary"
-                                    )}
-                                >
-                                    {v.name}
-                                </Button>
-                            ))}
+                            {product.variants?.length ? (
+                                product.variants.map((v) => (
+                                    <Button
+                                        key={v.id}
+                                        variant={selectedVariantId === v.id ? 'default' : 'outline'}
+                                        onClick={() => setSelectedVariantId(v.id)}
+                                        className={cn(
+                                            "px-5 py-6 rounded-xl border-2 font-bold transition-all",
+                                            selectedVariantId === v.id ? "border-primary bg-primary/5 text-primary" : "border-slate-200 dark:border-slate-700 hover:border-primary"
+                                        )}
+                                    >
+                                        {v.name}
+                                    </Button>
+                                ))
+                            ) : (
+                                <div className="text-sm text-slate-500">Tidak ada varian.</div>
+                            )}
                         </div>
                     </div>
 
@@ -108,8 +302,8 @@ export default function ProductDetailPage() {
                                 <ShoppingBasket className="w-5 h-5" />
                                 Tambah ke Keranjang
                             </Button>
-                            <Button variant="outline" className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white border-none font-bold py-7 rounded-xl flex items-center justify-center gap-2 transition-all">
-                                <WhatsAppIcon /> Beli via WhatsApp
+                            <Button onClick={handleBuyNow} variant="outline" className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white border-none font-bold py-7 rounded-xl flex items-center justify-center gap-2 transition-all">
+                                <WhatsAppIcon /> Beli Sekarang
                             </Button>
                         </div>
                     </div>
@@ -127,7 +321,7 @@ export default function ProductDetailPage() {
                             <Clock className="text-primary w-5 h-5" />
                             <div>
                                 <p className="text-[10px] uppercase font-bold text-slate-400">Pre-Order</p>
-                                <p className="text-xs font-bold">2-3 Days Wait</p>
+                                <p className="text-xs font-bold">{product.pre_order_days ?? 2} Hari</p>
                             </div>
                         </div>
                     </div>
@@ -140,30 +334,29 @@ export default function ProductDetailPage() {
                     <TabsList className="bg-transparent border-b border-slate-200 dark:border-slate-800 w-full justify-start rounded-none h-auto p-0 gap-12 mb-8">
                         <TabsTrigger value="description" className="pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary font-bold">Description</TabsTrigger>
                         <TabsTrigger value="shipping" className="pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary font-bold">Shipping Info</TabsTrigger>
-                        <TabsTrigger value="reviews" className="pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary font-bold">Reviews ({PRODUCT.reviewCount})</TabsTrigger>
+                        <TabsTrigger value="reviews" className="pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary font-bold">Reviews ({product.review_count})</TabsTrigger>
                     </TabsList>
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
                         <div className="lg:col-span-8">
                             <TabsContent value="description" className="mt-0">
                                 <div className="prose prose-slate dark:prose-invert max-w-none">
-                                    <p className="text-lg leading-relaxed text-slate-700 dark:text-slate-300">
-                                        Nikmati kelezatan Nastar Wisman Premium kami, camilan ikonik yang dibuat dengan standar kualitas tertinggi. Setiap butir nastar diproduksi secara handmade dengan tekstur yang sangat lumer di mulut (melt-in-your-mouth) berkat penggunaan 100% Mentega Wisman asli.
-                                    </p>
-                                    <h4 className="text-xl font-bold mt-8 mb-4">Kenapa Memilih Nastar Kami?</h4>
-                                    <ul className="space-y-3">
-                                        <li className="flex items-start gap-3">
-                                            <CheckCircle className="text-primary w-5 h-5 mt-0.5" />
-                                            <span><strong>Selai Nanas Homemade:</strong> Dibuat dari nanas madu pilihan, dimasak perlahan hingga mencapai karamelisasi sempurna tanpa pemanis buatan.</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <CheckCircle className="text-primary w-5 h-5 mt-0.5" />
-                                            <span><strong>Premium Butter:</strong> Aroma harum yang khas dari Wisman Dutch Butter memberikan cita rasa mewah yang tidak bisa ditemukan pada mentega biasa.</span>
-                                        </li>
-                                    </ul>
+                                    <p className="text-lg leading-relaxed text-slate-700 dark:text-slate-300">{product.description}</p>
                                 </div>
                             </TabsContent>
                             <TabsContent value="shipping">
-                                <p className="text-slate-600 dark:text-slate-400">Informasi pengiriman...</p>
+                                <div className="space-y-4 text-slate-700 dark:text-slate-300">
+                                    <p className="text-base">
+                                        {product.shipping_local_only
+                                            ? 'Pengiriman hanya tersedia untuk area dalam kota (local delivery) / pickup.'
+                                            : 'Pengiriman tersedia untuk dalam kota dan luar kota (tergantung jasa kirim & packaging).'}
+                                    </p>
+                                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-white/50 dark:bg-white/5">
+                                        <p className="text-sm font-semibold">Catatan Pre-Order</p>
+                                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                                            Minimal pre-order {product.pre_order_days ?? 2} hari.
+                                        </p>
+                                    </div>
+                                </div>
                             </TabsContent>
                             <TabsContent value="reviews">
                                 <p className="text-slate-600 dark:text-slate-400">Ulasan pelanggan...</p>
@@ -185,6 +378,8 @@ export default function ProductDetailPage() {
                     </div>
                 </Tabs>
             </div>
+            </>
+            )}
         </div>
     )
 }
@@ -196,23 +391,3 @@ function WhatsAppIcon() {
         </svg>
     )
 }
-
-const PRODUCT = {
-    id: 'nast-1',
-    name: 'Nastar Wisman Premium',
-    basePrice: 185000,
-    rating: 4.9,
-    reviewCount: 124,
-    description: 'Authentic recipe using 100% Dutch Wisman butter and slow-cooked homemade pineapple jam.',
-    images: [
-        { url: 'https://images.unsplash.com/photo-1621236304198-651066076478?q=80&w=1000', alt: 'Premium Nastar' },
-        { url: 'https://images.unsplash.com/photo-1621236304198-651066076478?q=80&w=1000', alt: 'Nastar inside' },
-        { url: 'https://images.unsplash.com/photo-1621236304198-651066076478?q=80&w=1000', alt: 'Nastar box' },
-    ],
-    variants: [
-        { id: 'v1', name: 'Small Jar (250g)', priceAdjustment: 0 },
-        { id: 'v2', name: 'Large Jar (500g)', priceAdjustment: 100000, oldPrice: 300000 },
-    ]
-}
-
-import { cn } from '@/lib/utils'

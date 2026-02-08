@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { ShieldCheck, CreditCard, Truck, ClipboardList, CheckCircle2, ArrowRight } from 'lucide-react'
@@ -8,17 +8,276 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useCartStore } from '@/store/useCartStore'
 import { cn } from '@/lib/utils'
+import { useSearchParams } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 type CheckoutStep = 'shipping' | 'payment' | 'confirmation'
 
+type ShippingData = {
+    fullName: string
+    phone: string
+    email: string
+    address: string
+    city: string
+    postalCode: string
+    notes: string
+}
+
+type PaymentMethod = 'whatsapp'
+
+type PublicSettings = {
+    whatsapp_number: string
+    tax_rate: number
+    store_name: string
+    store_email: string
+    delivery_notes: string
+    pickup_notes: string
+}
+
+function generateOrderWhatsAppLink(params: {
+    phoneNumber: string
+    orderNumber: string
+    customerName: string
+    customerPhone: string
+    address: string
+    city: string
+    totalAmount: number
+    itemsText: string
+    storeName?: string
+    deliveryNotes?: string
+    pickupNotes?: string
+}) {
+    const storeName = params.storeName?.trim() ? params.storeName.trim() : 'Bakery Umi'
+    let message = `Halo ${storeName}, saya sudah buat pesanan:%0A%0A`
+    message += `No. Pesanan: #${params.orderNumber}%0A`
+    message += `Nama: ${params.customerName}%0A`
+    message += `No WA: ${params.customerPhone}%0A`
+    message += `Alamat: ${params.address}, ${params.city}%0A%0A`
+    message += `Rincian:%0A${params.itemsText}%0A%0A`
+    message += `Total: Rp${params.totalAmount.toLocaleString('id-ID')}%0A%0A`
+
+    if (params.deliveryNotes?.trim()) {
+        message += `Catatan Delivery: ${params.deliveryNotes.trim()}%0A`
+    }
+    if (params.pickupNotes?.trim()) {
+        message += `Catatan Pickup: ${params.pickupNotes.trim()}%0A`
+    }
+
+    message += `Mohon dibantu info pembayaran & jadwal pengiriman/pickup. Terima kasih!`
+
+    return `https://wa.me/${params.phoneNumber}?text=${message}`
+}
+
 export default function CheckoutPage() {
+    const searchParams = useSearchParams()
+    const mode = searchParams.get('mode') ?? 'cart'
+    const isNowMode = mode === 'now'
+    const nowProductId = searchParams.get('productId') ?? ''
+    const nowVariantId = searchParams.get('variantId') ?? ''
+    const nowQty = Number(searchParams.get('qty') ?? '1')
+
     const [step, setStep] = useState<CheckoutStep>('shipping')
-    const { items, getTotalPrice } = useCartStore()
+    const { items, getTotalPrice, clearCart } = useCartStore()
+    const [nowItem, setNowItem] = useState<null | {
+        id: string
+        productId: string
+        variantId?: string
+        name: string
+        variantName?: string
+        price: number
+        quantity: number
+        image: string
+    }>(null)
+    const [nowLoading, setNowLoading] = useState(false)
+    const [nowError, setNowError] = useState<string>('')
+    const [shipping, setShipping] = useState<ShippingData>({
+        fullName: '',
+        phone: '',
+        email: '',
+        address: '',
+        city: '',
+        postalCode: '',
+        notes: '',
+    })
+    const paymentMethod: PaymentMethod = 'whatsapp'
+    const [submitting, setSubmitting] = useState(false)
+    const [settings, setSettings] = useState<PublicSettings>({
+        whatsapp_number: '628996853721',
+        tax_rate: 0.11,
+        store_name: 'Bakery Umi',
+        store_email: '',
+        delivery_notes: '',
+        pickup_notes: '',
+    })
+    const [createdOrderNumber, setCreatedOrderNumber] = useState<string>('')
+    const [createdOrderSummary, setCreatedOrderSummary] = useState<{
+        customerName: string
+        customerPhone: string
+        address: string
+        city: string
+        totalAmount: number
+        itemsText: string
+    } | null>(null)
+    const [createdWhatsAppLink, setCreatedWhatsAppLink] = useState<string>('')
     const subtotal = getTotalPrice()
-    const tax = subtotal * 0.11
+    const tax = subtotal * (Number(settings.tax_rate) || 0.11)
     const total = subtotal + tax
 
-    if (items.length === 0 && step !== 'confirmation') {
+    const checkoutItems = useMemo(() => {
+        if (isNowMode) return nowItem ? [nowItem] : []
+        return items
+    }, [isNowMode, items, nowItem])
+
+    const computedSubtotal = useMemo(() => {
+        return checkoutItems.reduce((sum, i) => sum + Number(i.price) * Number(i.quantity), 0)
+    }, [checkoutItems])
+
+    const computedTax = computedSubtotal * (Number(settings.tax_rate) || 0.11)
+    const computedTotal = computedSubtotal + computedTax
+
+    const taxLabel = `Pajak (${Math.round((Number(settings.tax_rate) || 0.11) * 100)}%)`
+
+    useEffect(() => {
+        let cancelled = false
+
+        const run = async () => {
+            try {
+                const res = await fetch('/api/settings')
+                const json = await res.json()
+                if (!res.ok || !json?.success) return
+                if (cancelled) return
+
+                const s = json.settings as Partial<PublicSettings>
+                setSettings((prev) => ({
+                    ...prev,
+                    whatsapp_number: String(s.whatsapp_number ?? prev.whatsapp_number),
+                    tax_rate: typeof s.tax_rate === 'number' ? s.tax_rate : prev.tax_rate,
+                    store_name: String((s as any).store_name ?? prev.store_name),
+                    store_email: String((s as any).store_email ?? prev.store_email),
+                    delivery_notes: String(s.delivery_notes ?? prev.delivery_notes),
+                    pickup_notes: String(s.pickup_notes ?? prev.pickup_notes),
+                }))
+            } catch {
+                // ignore
+            }
+        }
+
+        run()
+
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
+    useEffect(() => {
+        let cancelled = false
+
+        const run = async () => {
+            if (!isNowMode) {
+                setNowItem(null)
+                setNowError('')
+                setNowLoading(false)
+                return
+            }
+
+            if (!nowProductId) {
+                setNowItem(null)
+                setNowError('Produk tidak valid')
+                return
+            }
+
+            setNowLoading(true)
+            setNowError('')
+
+            try {
+                const { data: product, error: productError } = await supabase
+                    .from('products')
+                    .select('id, name, base_price, featured_image')
+                    .eq('id', nowProductId)
+                    .maybeSingle()
+
+                if (cancelled) return
+
+                if (productError) throw productError
+                if (!product) {
+                    setNowItem(null)
+                    setNowError('Produk tidak ditemukan')
+                    setNowLoading(false)
+                    return
+                }
+
+                let variantName: string | undefined
+                let adjustment = 0
+
+                if (nowVariantId) {
+                    const { data: variant, error: variantError } = await supabase
+                        .from('product_variants')
+                        .select('id, name, price_adjustment')
+                        .eq('id', nowVariantId)
+                        .eq('product_id', product.id)
+                        .maybeSingle()
+
+                    if (cancelled) return
+                    if (variantError) throw variantError
+                    if (variant) {
+                        variantName = variant.name
+                        adjustment = Number(variant.price_adjustment ?? 0)
+                    }
+                }
+
+                const base = Number(product.base_price ?? 0)
+                const unitPrice = base + adjustment
+                const quantity = Number.isFinite(nowQty) && nowQty > 0 ? Math.floor(nowQty) : 1
+
+                setNowItem({
+                    id: `now-${product.id}-${nowVariantId || 'base'}`,
+                    productId: product.id,
+                    variantId: nowVariantId || undefined,
+                    name: product.name,
+                    variantName,
+                    price: unitPrice,
+                    quantity,
+                    image: product.featured_image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=1000',
+                })
+                setNowLoading(false)
+            } catch (e) {
+                if (cancelled) return
+                const message = e instanceof Error ? e.message : 'Gagal memuat produk'
+                setNowItem(null)
+                setNowError(message)
+                setNowLoading(false)
+            }
+        }
+
+        run()
+
+        return () => {
+            cancelled = true
+        }
+    }, [isNowMode, nowProductId, nowQty, nowVariantId])
+
+    if (step !== 'confirmation' && (checkoutItems.length === 0 || (isNowMode && (nowLoading || !!nowError)))) {
+        if (isNowMode && nowLoading) {
+            return (
+                <div className="max-w-7xl mx-auto px-6 py-20 text-center">
+                    <h1 className="text-3xl font-black mb-4">Memuat Produk...</h1>
+                    <p className="text-[#8b775b]">Tunggu sebentar ya.</p>
+                </div>
+            )
+        }
+
+        if (isNowMode && nowError) {
+            return (
+                <div className="max-w-7xl mx-auto px-6 py-20 text-center">
+                    <h1 className="text-3xl font-black mb-4">Gagal Memuat Produk</h1>
+                    <p className="text-[#8b775b] mb-8">{nowError}</p>
+                    <Button asChild className="bg-primary hover:bg-primary/90 text-white font-bold py-6 px-8 rounded-xl">
+                        <Link href="/products">Kembali ke Produk</Link>
+                    </Button>
+                </div>
+            )
+        }
+
         return (
             <div className="max-w-7xl mx-auto px-6 py-20 text-center">
                 <h1 className="text-3xl font-black mb-4">Keranjang Kosong</h1>
@@ -69,9 +328,163 @@ export default function CheckoutPage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 max-w-6xl mx-auto">
                 {/* Main Form Area */}
                 <div className="lg:col-span-7">
-                    {step === 'shipping' && <ShippingForm onNext={() => setStep('payment')} />}
-                    {step === 'payment' && <PaymentForm onBack={() => setStep('shipping')} onNext={() => setStep('confirmation')} />}
-                    {step === 'confirmation' && <ConfirmationView />}
+                    {step === 'shipping' && (
+                        <div className="space-y-6">
+                            {(settings.delivery_notes?.trim() || settings.pickup_notes?.trim()) && (
+                                <div className="rounded-2xl border border-primary/10 bg-primary/5 p-5">
+                                    <p className="text-xs font-bold text-primary uppercase tracking-wider">Catatan</p>
+                                    {settings.delivery_notes?.trim() && (
+                                        <p className="text-sm text-[#8b775b] mt-2">
+                                            <span className="font-semibold text-slate-900 dark:text-slate-100">Delivery:</span>{' '}
+                                            {settings.delivery_notes.trim()}
+                                        </p>
+                                    )}
+                                    {settings.pickup_notes?.trim() && (
+                                        <p className="text-sm text-[#8b775b] mt-2">
+                                            <span className="font-semibold text-slate-900 dark:text-slate-100">Pickup:</span>{' '}
+                                            {settings.pickup_notes.trim()}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            <ShippingForm value={shipping} onChange={setShipping} onNext={() => setStep('payment')} />
+                        </div>
+                    )}
+                    {step === 'payment' && (
+                        <div className="space-y-6">
+                            {(settings.delivery_notes?.trim() || settings.pickup_notes?.trim()) && (
+                                <div className="rounded-2xl border border-primary/10 bg-primary/5 p-5">
+                                    <p className="text-xs font-bold text-primary uppercase tracking-wider">Catatan</p>
+                                    {settings.delivery_notes?.trim() && (
+                                        <p className="text-sm text-[#8b775b] mt-2">
+                                            <span className="font-semibold text-slate-900 dark:text-slate-100">Delivery:</span>{' '}
+                                            {settings.delivery_notes.trim()}
+                                        </p>
+                                    )}
+                                    {settings.pickup_notes?.trim() && (
+                                        <p className="text-sm text-[#8b775b] mt-2">
+                                            <span className="font-semibold text-slate-900 dark:text-slate-100">Pickup:</span>{' '}
+                                            {settings.pickup_notes.trim()}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            <PaymentForm
+                                submitting={submitting}
+                                onBack={() => setStep('shipping')}
+                                onNext={async () => {
+                                if (!checkoutItems.length) return
+
+                                const waWindow = window.open('', '_blank')
+                                try {
+                                    waWindow?.document.write(
+                                        '<p style="font-family:system-ui,-apple-system,Segoe UI,Roboto; padding:16px">Mengarahkan ke WhatsApp...</p>'
+                                    )
+                                } catch {
+                                    // ignore
+                                }
+
+                                setSubmitting(true)
+                                try {
+                                    const response = await fetch('/api/orders', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            shipping: {
+                                                fullName: shipping.fullName,
+                                                phone: shipping.phone,
+                                                email: shipping.email || undefined,
+                                                address: shipping.address,
+                                                city: shipping.city,
+                                                postalCode: shipping.postalCode || undefined,
+                                                notes: shipping.notes || undefined,
+                                            },
+                                            paymentMethod,
+                                            items: checkoutItems.map((i) => ({
+                                                productId: i.productId,
+                                                variantId: i.variantId,
+                                                productName: i.name,
+                                                variantName: i.variantName,
+                                                price: i.price,
+                                                quantity: i.quantity,
+                                            })),
+                                        }),
+                                    })
+
+                                    const result = await response.json()
+
+                                    if (!response.ok || !result?.success) {
+                                        throw new Error(result?.error ?? 'Gagal membuat pesanan')
+                                    }
+
+                                    setCreatedOrderNumber(result.order.order_number)
+
+                                    const itemsText = checkoutItems
+                                        .map((i) => `- ${i.name}${i.variantName ? ` (${i.variantName})` : ''} x${i.quantity}`)
+                                        .join('%0A')
+
+                                    const summary = {
+                                        customerName: shipping.fullName,
+                                        customerPhone: shipping.phone,
+                                        address: shipping.address,
+                                        city: shipping.city,
+                                        totalAmount: Number(result.order.total_amount ?? computedTotal),
+                                        itemsText,
+                                    }
+
+                                    setCreatedOrderSummary(summary)
+
+                                    const waLink = generateOrderWhatsAppLink({
+                                        phoneNumber: settings.whatsapp_number,
+                                        orderNumber: result.order.order_number,
+                                        customerName: summary.customerName,
+                                        customerPhone: summary.customerPhone,
+                                        address: summary.address,
+                                        city: summary.city,
+                                        totalAmount: summary.totalAmount,
+                                        itemsText: summary.itemsText,
+                                        storeName: settings.store_name,
+                                        deliveryNotes: settings.delivery_notes,
+                                        pickupNotes: settings.pickup_notes,
+                                    })
+                                    setCreatedWhatsAppLink(waLink)
+
+                                    if (waWindow && !waWindow.closed) {
+                                        try {
+                                            waWindow.location.replace(waLink)
+                                        } catch {
+                                            // if blocked, user can click the button on confirmation page
+                                        }
+                                    }
+
+                                    if (!isNowMode) {
+                                        clearCart()
+                                    }
+                                    setStep('confirmation')
+                                } catch (e) {
+                                    if (waWindow && !waWindow.closed) {
+                                        waWindow.close()
+                                    }
+                                    const message = e instanceof Error ? e.message : 'Gagal membuat pesanan'
+                                    alert(message)
+                                } finally {
+                                    setSubmitting(false)
+                                }
+                                }}
+                            />
+                        </div>
+                    )}
+                    {step === 'confirmation' && (
+                        <ConfirmationView
+                            orderNumber={createdOrderNumber}
+                            paymentMethod={paymentMethod}
+                            orderSummary={createdOrderSummary}
+                            whatsAppLink={createdWhatsAppLink}
+                            whatsappNumber={settings.whatsapp_number}
+                        />
+                    )}
                 </div>
 
                 {/* Order Summary (Static for Checkout) */}
@@ -80,7 +493,7 @@ export default function CheckoutPage() {
                         <div className="sticky top-24 bg-white dark:bg-[#2a241c] rounded-2xl p-8 border border-[#f1eee9] dark:border-[#3a342a] shadow-sm">
                             <h3 className="text-xl font-bold mb-6">Ringkasan Pesanan</h3>
                             <div className="space-y-4 mb-8 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                                {items.map(item => (
+                                {checkoutItems.map(item => (
                                     <div key={item.id} className="flex gap-4">
                                         <div className="relative size-16 shrink-0 rounded-lg overflow-hidden border border-[#f1eee9] dark:border-[#3a342a]">
                                             <Image src={item.image} alt={item.name} fill className="object-cover" />
@@ -100,15 +513,15 @@ export default function CheckoutPage() {
                             <div className="space-y-3 pt-6 border-t border-dashed border-[#f1eee9] dark:border-[#3a342a]">
                                 <div className="flex justify-between text-base">
                                     <span className="text-[#8b775b]">Subtotal</span>
-                                    <span className="font-medium">Rp {subtotal.toLocaleString()}</span>
+                                    <span className="font-medium">Rp {computedSubtotal.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between text-base">
-                                    <span className="text-[#8b775b]">Pajak (11%)</span>
-                                    <span className="font-medium">Rp {tax.toLocaleString()}</span>
+                                    <span className="text-[#8b775b]">{taxLabel}</span>
+                                    <span className="font-medium">Rp {computedTax.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between pt-4">
                                     <span className="text-lg font-bold">Total</span>
-                                    <span className="text-2xl font-black text-primary">Rp {total.toLocaleString()}</span>
+                                    <span className="text-2xl font-black text-primary">Rp {computedTotal.toLocaleString()}</span>
                                 </div>
                             </div>
 
@@ -126,7 +539,15 @@ export default function CheckoutPage() {
     )
 }
 
-function ShippingForm({ onNext }: { onNext: () => void }) {
+function ShippingForm({
+    value,
+    onChange,
+    onNext,
+}: {
+    value: ShippingData
+    onChange: (next: ShippingData) => void
+    onNext: () => void
+}) {
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-left duration-500">
             <div className="space-y-2">
@@ -137,31 +558,79 @@ function ShippingForm({ onNext }: { onNext: () => void }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5 md:col-span-2">
                     <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Nama Lengkap</label>
-                    <Input className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]" placeholder="Contoh: Budi Santoso" />
+                    <Input
+                        value={value.fullName}
+                        onChange={(e) => onChange({ ...value, fullName: e.target.value })}
+                        className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]"
+                        placeholder="Contoh: Budi Santoso"
+                    />
                 </div>
                 <div className="space-y-1.5">
                     <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Nomor WhatsApp</label>
-                    <Input className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]" placeholder="0812xxxx" />
+                    <Input
+                        value={value.phone}
+                        onChange={(e) => onChange({ ...value, phone: e.target.value })}
+                        className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]"
+                        placeholder="0812xxxx"
+                    />
                 </div>
                 <div className="space-y-1.5">
                     <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Email (Opsional)</label>
-                    <Input className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]" placeholder="budi@email.com" />
+                    <Input
+                        value={value.email}
+                        onChange={(e) => onChange({ ...value, email: e.target.value })}
+                        className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]"
+                        placeholder="budi@email.com"
+                    />
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                     <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Alamat Lengkap</label>
-                    <textarea className="w-full min-h-[100px] p-4 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border border-[#f1eee9] dark:border-[#3a342a] focus:ring-2 focus:ring-primary/20 outline-none text-sm" placeholder="Jalan, Blok, Nomor Rumah..."></textarea>
+                    <textarea
+                        value={value.address}
+                        onChange={(e) => onChange({ ...value, address: e.target.value })}
+                        className="w-full min-h-[100px] p-4 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border border-[#f1eee9] dark:border-[#3a342a] focus:ring-2 focus:ring-primary/20 outline-none text-sm"
+                        placeholder="Jalan, Blok, Nomor Rumah..."
+                    ></textarea>
                 </div>
                 <div className="space-y-1.5">
                     <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Kota</label>
-                    <Input className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]" placeholder="Jakarta Barat" />
+                    <Input
+                        value={value.city}
+                        onChange={(e) => onChange({ ...value, city: e.target.value })}
+                        className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]"
+                        placeholder="Jakarta Barat"
+                    />
                 </div>
                 <div className="space-y-1.5">
                     <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Kode Pos</label>
-                    <Input className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]" placeholder="11xxx" />
+                    <Input
+                        value={value.postalCode}
+                        onChange={(e) => onChange({ ...value, postalCode: e.target.value })}
+                        className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]"
+                        placeholder="11xxx"
+                    />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Catatan (Opsional)</label>
+                    <textarea
+                        value={value.notes}
+                        onChange={(e) => onChange({ ...value, notes: e.target.value })}
+                        className="w-full min-h-[90px] p-4 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border border-[#f1eee9] dark:border-[#3a342a] focus:ring-2 focus:ring-primary/20 outline-none text-sm"
+                        placeholder="Contoh: titip ke satpam / patokan rumah / jam kirim..."
+                    ></textarea>
                 </div>
             </div>
 
-            <Button onClick={onNext} className="w-full md:w-fit px-12 py-7 bg-primary text-white font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center gap-2">
+            <Button
+                onClick={() => {
+                    if (!value.fullName || !value.phone || !value.address || !value.city) {
+                        alert('Lengkapi data pengiriman dulu ya.')
+                        return
+                    }
+                    onNext()
+                }}
+                className="w-full md:w-fit px-12 py-7 bg-primary text-white font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center gap-2"
+            >
                 Pilih Pembayaran
                 <ArrowRight className="w-5 h-5" />
             </Button>
@@ -169,21 +638,28 @@ function ShippingForm({ onNext }: { onNext: () => void }) {
     )
 }
 
-function PaymentForm({ onBack, onNext }: { onBack: () => void, onNext: () => void }) {
-    const [method, setMethod] = useState<'wa' | 'online'>('wa')
-
+function PaymentForm({
+    submitting,
+    onBack,
+    onNext,
+}: {
+    submitting: boolean
+    onBack: () => void
+    onNext: () => void
+}) {
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-right duration-500">
             <div className="space-y-2">
                 <h2 className="text-2xl font-black">Metode Pembayaran</h2>
-                <p className="text-[#8b775b]">Kami menyediakan berbagai metode pembayaran aman.</p>
+                <p className="text-[#8b775b]">Saat ini pre-order hanya bisa diproses melalui WhatsApp admin.</p>
             </div>
 
             <div className="space-y-4">
                 <div
-                    onClick={() => setMethod('wa')}
-                    className={cn("p-6 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between group",
-                        method === 'wa' ? "border-primary bg-primary/5" : "border-[#f1eee9] dark:border-[#3a342a] hover:border-primary/50")}
+                    className={cn(
+                        "p-6 rounded-2xl border-2 transition-all flex items-center justify-between",
+                        "border-primary bg-primary/5"
+                    )}
                 >
                     <div className="flex items-center gap-4">
                         <div className="size-12 bg-green-500 rounded-xl flex items-center justify-center text-white">
@@ -194,27 +670,8 @@ function PaymentForm({ onBack, onNext }: { onBack: () => void, onNext: () => voi
                             <p className="text-sm text-[#8b775b]">Admin kami akan membantu proses pembayaran Anda.</p>
                         </div>
                     </div>
-                    <div className={cn("size-6 rounded-full border-2 flex items-center justify-center", method === 'wa' ? "border-primary" : "border-[#8b775b]")}>
-                        {method === 'wa' && <div className="size-3 bg-primary rounded-full"></div>}
-                    </div>
-                </div>
-
-                <div
-                    onClick={() => setMethod('online')}
-                    className={cn("p-6 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between group",
-                        method === 'online' ? "border-primary bg-primary/5" : "border-[#f1eee9] dark:border-[#3a342a] hover:border-primary/50")}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="size-12 bg-primary rounded-xl flex items-center justify-center text-white">
-                            <CreditCard className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="font-bold text-lg">Pembayaran Online (QRIS, VA, CC)</p>
-                            <p className="text-sm text-[#8b775b]">Setelmen otomatis via Midtrans Gateway.</p>
-                        </div>
-                    </div>
-                    <div className={cn("size-6 rounded-full border-2 flex items-center justify-center", method === 'online' ? "border-primary" : "border-[#8b775b]")}>
-                        {method === 'online' && <div className="size-3 bg-primary rounded-full"></div>}
+                    <div className={cn("size-6 rounded-full border-2 flex items-center justify-center", "border-primary")}>
+                        <div className="size-3 bg-primary rounded-full"></div>
                     </div>
                 </div>
             </div>
@@ -223,8 +680,8 @@ function PaymentForm({ onBack, onNext }: { onBack: () => void, onNext: () => voi
                 <Button variant="ghost" onClick={onBack} className="px-8 py-7 rounded-xl font-bold text-[#8b775b]">
                     Kembali
                 </Button>
-                <Button onClick={onNext} className="flex-1 md:flex-none md:px-12 py-7 bg-primary text-white font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
-                    Buat Pesanan
+                <Button disabled={submitting} onClick={onNext} className="flex-1 md:flex-none md:px-12 py-7 bg-primary text-white font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+                    {submitting ? 'Memproses...' : 'Lanjut ke WhatsApp'}
                     <CheckCircle2 className="w-5 h-5" />
                 </Button>
             </div>
@@ -232,7 +689,26 @@ function PaymentForm({ onBack, onNext }: { onBack: () => void, onNext: () => voi
     )
 }
 
-function ConfirmationView() {
+function ConfirmationView({
+    orderNumber,
+    paymentMethod,
+    orderSummary,
+    whatsAppLink,
+    whatsappNumber,
+}: {
+    orderNumber: string
+    paymentMethod: PaymentMethod
+    orderSummary: {
+        customerName: string
+        customerPhone: string
+        address: string
+        city: string
+        totalAmount: number
+        itemsText: string
+    } | null
+    whatsAppLink: string
+    whatsappNumber: string
+}) {
     return (
         <div className="text-center py-20 space-y-8 animate-in zoom-in duration-500">
             <div className="size-24 bg-green-500 text-white rounded-full flex items-center justify-center mx-auto shadow-xl shadow-green-500/20">
@@ -240,7 +716,7 @@ function ConfirmationView() {
             </div>
             <div>
                 <h2 className="text-4xl font-black mb-2 text-[#191510] dark:text-[#fbfaf9]">Pesanan Diterima!</h2>
-                <p className="text-lg text-[#8b775b]">Nomor Pesanan: <span className="text-primary font-bold">#WO-240501A</span></p>
+                <p className="text-lg text-[#8b775b]">Nomor Pesanan: <span className="text-primary font-bold">{orderNumber ? `#${orderNumber}` : '-'}</span></p>
             </div>
 
             <div className="max-w-md mx-auto bg-white dark:bg-[#2a241c] p-8 rounded-2xl border border-[#f1eee9] dark:border-[#3a342a] shadow-sm">
@@ -249,9 +725,33 @@ function ConfirmationView() {
                     <Button asChild className="w-full bg-primary py-7 rounded-xl font-bold">
                         <Link href="/">Kembali ke Beranda</Link>
                     </Button>
-                    <Button variant="outline" className="w-full py-7 rounded-xl font-bold border-primary text-primary">
-                        Lihat Status Pesanan
+                    <Button asChild variant="outline" className="w-full py-7 rounded-xl font-bold border-primary text-primary">
+                        <Link href={orderNumber ? `/orders/${encodeURIComponent(orderNumber)}` : '/products'}>
+                            Lihat Status Pesanan
+                        </Link>
                     </Button>
+
+                    {paymentMethod === 'whatsapp' && orderNumber && (
+                        <Button asChild className="w-full py-7 rounded-xl font-bold bg-green-600 hover:bg-green-700 text-white">
+                            <a
+                                href={whatsAppLink || generateOrderWhatsAppLink({
+                                    phoneNumber: whatsappNumber,
+                                    orderNumber,
+                                    customerName: orderSummary?.customerName ?? '',
+                                    customerPhone: orderSummary?.customerPhone ?? '',
+                                    address: orderSummary?.address ?? '',
+                                    city: orderSummary?.city ?? '',
+                                    totalAmount: orderSummary?.totalAmount ?? 0,
+                                    itemsText: orderSummary?.itemsText ?? '',
+                                    storeName: 'Bakery Umi',
+                                })}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                Konfirmasi via WhatsApp
+                            </a>
+                        </Button>
+                    )}
                 </div>
             </div>
         </div>

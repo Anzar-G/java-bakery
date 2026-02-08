@@ -1,0 +1,105 @@
+import { NextResponse, type NextRequest } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+
+const ADMIN_EMAILS = new Set(['javabakery@java.com'])
+
+export async function GET(request: NextRequest) {
+    try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+        if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+            return NextResponse.json(
+                { success: false, error: 'Missing SUPABASE env vars.' },
+                { status: 500 }
+            )
+        }
+
+        // Validate session (auth) using anon + cookies
+        const supabaseAuth = createServerClient(supabaseUrl, anonKey, {
+            cookies: {
+                get(name: string) {
+                    return request.cookies.get(name)?.value
+                },
+                set(_name: string, _value: string, _options: CookieOptions) {
+                    // no-op for read-only GET
+                },
+                remove(_name: string, _options: CookieOptions) {
+                    // no-op
+                },
+            },
+        })
+
+        const {
+            data: { user },
+        } = await supabaseAuth.auth.getUser()
+
+        if (!user) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const email = user.email?.toLowerCase() ?? ''
+        if (!ADMIN_EMAILS.has(email)) {
+            return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 })
+        }
+
+        // Use service role for reading dashboard aggregates
+        const supabase = createClient(supabaseUrl, serviceRoleKey, {
+            auth: { persistSession: false },
+        })
+
+        const [{ count: ordersCount, error: ordersCountError }, { count: productsCount, error: productsCountError }, { count: customersCount, error: customersCountError }] = await Promise.all([
+            supabase.from('orders').select('id', { count: 'exact', head: true }),
+            supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_active', true),
+            supabase.from('customers').select('id', { count: 'exact', head: true }),
+        ])
+
+        if (ordersCountError || productsCountError || customersCountError) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: ordersCountError?.message ?? productsCountError?.message ?? customersCountError?.message ?? 'Failed to load stats',
+                },
+                { status: 500 }
+            )
+        }
+
+        const { data: revenueRows, error: revenueError } = await supabase
+            .from('orders')
+            .select('total_amount, payment_status')
+
+        if (revenueError) {
+            return NextResponse.json({ success: false, error: revenueError.message }, { status: 500 })
+        }
+
+        const totalRevenue = (revenueRows ?? [])
+            .filter((r) => String((r as any).payment_status ?? '').toLowerCase() === 'paid')
+            .reduce((sum, r) => sum + Number((r as any).total_amount ?? 0), 0)
+
+        const { data: recentOrders, error: recentOrdersError } = await supabase
+            .from('orders')
+            .select('id, order_number, customer_name, customer_email, status, payment_status, total_amount, created_at')
+            .order('created_at', { ascending: false })
+            .limit(6)
+
+        if (recentOrdersError) {
+            return NextResponse.json({ success: false, error: recentOrdersError.message }, { status: 500 })
+        }
+
+        return NextResponse.json({
+            success: true,
+            stats: {
+                totalRevenue,
+                totalOrders: ordersCount ?? 0,
+                activeProducts: productsCount ?? 0,
+                totalCustomers: customersCount ?? 0,
+            },
+            recentOrders: recentOrders ?? [],
+        })
+    } catch (e) {
+        const message = e instanceof Error ? e.message : 'Unknown error'
+        return NextResponse.json({ success: false, error: message }, { status: 500 })
+    }
+}

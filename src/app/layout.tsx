@@ -11,8 +11,8 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Warm Oven Bakery | Freshly Baked Happiness",
-  description: "Artisanal sourdough, fudgy brownies, and handmade pizza baked fresh in our home kitchen.",
+  title: "Bakery Umi | Freshly Baked Happiness",
+  description: "Aneka kue kering, brownies, donat, dan pizza homemade. Pre-order untuk kualitas terbaik.",
 };
 
 export default function RootLayout({

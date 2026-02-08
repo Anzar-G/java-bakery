@@ -359,34 +359,272 @@ VALUES (
         'hello@warmoven.id',
         'Store contact email'
     );
--- Insert sample categories
-INSERT INTO categories (name, slug, description, display_order)
-VALUES (
-        'Kue Kering',
-        'kue-kering',
-        'Kue kering premium dan ekonomis',
-        1
-    ),
+
+-- ============================================
+-- BAKERY UMI CATALOG SEED
+-- ============================================
+
+-- Upsert categories aligned with Bakery Umi taxonomy
+INSERT INTO categories (name, slug, description, display_order, is_active)
+VALUES
+    ('Kue Kering Lebaran', 'kue-kering-lebaran', 'Kue kering lebaran ekonomis dan premium', 1, true),
+    ('Brownies & Cake', 'brownies-cake', 'Brownies homemade dan cake lembut dengan berbagai topping', 2, true),
+    ('Roti & Donat', 'roti-donat', 'Roti lembut dan donat aneka topping', 3, true),
+    ('Pizza & Savory', 'pizza-savory', 'Pizza homemade dan savory bites', 4, true)
+ON CONFLICT (slug) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    display_order = EXCLUDED.display_order,
+    is_active = EXCLUDED.is_active;
+
+UPDATE categories
+SET image_url = CASE slug
+    WHEN 'kue-kering-lebaran' THEN 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&w=1200&q=80'
+    WHEN 'brownies-cake' THEN 'https://images.unsplash.com/photo-1464349095431-e9a21285b5f3?auto=format&fit=crop&w=1200&q=80'
+    WHEN 'roti-donat' THEN 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1200&q=80'
+    WHEN 'pizza-savory' THEN 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80'
+    ELSE image_url
+END
+WHERE slug IN ('kue-kering-lebaran', 'brownies-cake', 'roti-donat', 'pizza-savory');
+
+-- Kue Kering Lebaran Ekonomis (1 product, 12 variants)
+INSERT INTO products (
+    category_id,
+    name,
+    slug,
+    description,
+    base_price,
+    is_pre_order,
+    pre_order_days,
+    is_shippable,
+    shipping_local_only,
+    is_active,
+    is_featured
+)
+SELECT
+    c.id,
+    'Kue Kering Lebaran - Ekonomis (250gr)',
+    'kue-kering-lebaran-ekonomis-250gr',
+    'Kue kering lebaran dengan berbagai pilihan rasa favorit, dikemas dalam toples 250gr. Cocok untuk cemilan keluarga atau sajian tamu.',
+    25000,
+    true,
+    2,
+    true,
+    false,
+    true,
+    true
+FROM categories c
+WHERE c.slug = 'kue-kering-lebaran'
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO product_variants (product_id, name, price_adjustment, is_active, display_order)
+SELECT
+    p.id,
+    v.name,
+    0,
+    true,
+    v.display_order
+FROM products p
+JOIN categories c ON p.category_id = c.id
+JOIN (
+    VALUES
+        ('Putri Salju', 1),
+        ('Nastar', 2),
+        ('Nastar Keju', 3),
+        ('Kastengel', 4),
+        ('Kue Sagu', 5),
+        ('Kue Kacang', 6),
+        ('Lidah Kucing', 7),
+        ('Semprit Klasik', 8),
+        ('Choco Chip Cookies', 9),
+        ('Palm Cheese', 10),
+        ('Kue Salju Pandan', 11),
+        ('Thumbprint', 12)
+) AS v(name, display_order) ON p.slug = 'kue-kering-lebaran-ekonomis-250gr' AND c.slug = 'kue-kering-lebaran'
+ON CONFLICT DO NOTHING;
+
+-- Kue Kering Lebaran Premium (4 separate products)
+INSERT INTO products (
+    category_id,
+    name,
+    slug,
+    description,
+    base_price,
+    is_pre_order,
+    pre_order_days,
+    is_shippable,
+    shipping_local_only,
+    is_active
+)
+SELECT
+    c.id,
+    p.name,
+    p.slug,
+    p.description,
+    p.base_price,
+    true,
+    2,
+    true,
+    false,
+    true
+FROM categories c,
     (
-        'Brownies',
-        'brownies',
-        'Brownies fudgy dengan berbagai topping',
-        2
-    ),
+        VALUES
+            ('Nastar Premium (Toples Besar)', 'nastar-premium', 'Nastar premium dengan isian selai nanas homemade, tekstur lumer di mulut.', 70000),
+            ('Kastengel Premium (Toples Besar)', 'kastengel-premium', 'Kastengel keju premium dengan taburan keju melimpah.', 70000),
+            ('Kue Salju Mete Premium', 'kue-salju-mete', 'Kue salju lembut dengan taburan kacang mete premium.', 80000),
+            ('Kue Semprit Klasik Premium', 'kue-semprit-klasik-premium', 'Kue semprit klasik dengan rasa butter yang rich.', 60000)
+    ) AS p(name, slug, description, base_price)
+WHERE c.slug = 'kue-kering-lebaran'
+ON CONFLICT (slug) DO NOTHING;
+
+-- Brownies Homemade (1 product, 4 variants)
+INSERT INTO products (
+    category_id,
+    name,
+    slug,
+    description,
+    base_price,
+    is_pre_order,
+    pre_order_days,
+    is_shippable,
+    shipping_local_only,
+    is_active,
+    is_featured
+)
+SELECT
+    c.id,
+    'Brownies Homemade',
+    'brownies-homemade',
+    'Brownies lembut dan fudgy dengan pilihan topping premium. Dibuat fresh dengan bahan berkualitas.',
+    70000,
+    true,
+    2,
+    true,
+    false,
+    true,
+    true
+FROM categories c
+WHERE c.slug = 'brownies-cake'
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO product_variants (product_id, name, price_adjustment, is_active, display_order)
+SELECT
+    p.id,
+    v.name,
+    v.price_adjustment,
+    true,
+    v.display_order
+FROM products p
+JOIN categories c ON p.category_id = c.id
+JOIN (
+    VALUES
+        ('Full Almond', 0, 1),
+        ('Choco Chip', 0, 2),
+        ('Full Keju', 0, 3),
+        ('Mix (Almond + Keju + Choco Chip)', 10000, 4)
+) AS v(name, price_adjustment, display_order) ON p.slug = 'brownies-homemade' AND c.slug = 'brownies-cake'
+ON CONFLICT DO NOTHING;
+
+-- Donat (2 products, no variants)
+INSERT INTO products (
+    category_id,
+    name,
+    slug,
+    description,
+    base_price,
+    is_pre_order,
+    pre_order_days,
+    is_shippable,
+    shipping_local_only,
+    is_active
+)
+SELECT
+    c.id,
+    p.name,
+    p.slug,
+    p.description,
+    p.base_price,
+    true,
+    2,
+    true,
+    true,
+    true
+FROM categories c,
     (
-        'Donat',
-        'donat',
-        'Donat empuk dengan berbagai varian',
-        3
-    ),
-    (
-        'Pizza',
-        'pizza',
-        'Pizza homemade dengan topping pilihan',
-        4
-    );
--- Note: Add your actual product data here
--- Example:
--- INSERT INTO products (category_id, name, slug, description, base_price, is_pre_order, pre_order_days) 
--- SELECT id, 'Nastar Wisman Premium', 'nastar-wisman-premium', 'Kue kering premium dengan mentega Wisman asli', 185000, true, 2
--- FROM categories WHERE slug = 'kue-kering';
+        VALUES
+            ('Donat Aneka Topping (12 pcs)', 'donat-aneka-topping-12pcs', 'Donat empuk dengan aneka topping manis, isi 12 pcs per box.', 35000),
+            ('Donat Original (6 pcs)', 'donat-original-6pcs', 'Donat original klasik, isi 6 pcs per box.', 20000)
+    ) AS p(name, slug, description, base_price)
+WHERE c.slug = 'roti-donat'
+ON CONFLICT (slug) DO NOTHING;
+
+UPDATE products
+SET featured_image = CASE slug
+    WHEN 'kue-kering-lebaran-ekonomis-250gr' THEN 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&w=1200&q=80'
+    WHEN 'nastar-premium' THEN 'https://images.unsplash.com/photo-1541592106381-b31e9677c0e5?auto=format&fit=crop&w=1200&q=80'
+    WHEN 'kastengel-premium' THEN 'https://images.unsplash.com/photo-1514516870926-206c1f1c2e7b?auto=format&fit=crop&w=1200&q=80'
+    WHEN 'kue-salju-mete' THEN 'https://images.unsplash.com/photo-1519869325930-281384150729?auto=format&fit=crop&w=1200&q=80'
+    WHEN 'kue-semprit-klasik-premium' THEN 'https://images.unsplash.com/photo-1486427944299-d1955d23e34d?auto=format&fit=crop&w=1200&q=80'
+    WHEN 'brownies-homemade' THEN 'https://images.unsplash.com/photo-1530610476181-d834309647bb?auto=format&fit=crop&w=1200&q=80'
+    WHEN 'donat-aneka-topping-12pcs' THEN 'https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=1200&q=80'
+    WHEN 'donat-original-6pcs' THEN 'https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=1200&q=80'
+    WHEN 'pizza-homemade' THEN 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80'
+    ELSE featured_image
+END
+WHERE slug IN (
+    'kue-kering-lebaran-ekonomis-250gr',
+    'nastar-premium',
+    'kastengel-premium',
+    'kue-salju-mete',
+    'kue-semprit-klasik-premium',
+    'brownies-homemade',
+    'donat-aneka-topping-12pcs',
+    'donat-original-6pcs',
+    'pizza-homemade'
+);
+
+-- Pizza Homemade (1 product, 3 variants, local delivery only)
+INSERT INTO products (
+    category_id,
+    name,
+    slug,
+    description,
+    base_price,
+    is_pre_order,
+    pre_order_days,
+    is_shippable,
+    shipping_local_only,
+    is_active
+)
+SELECT
+    c.id,
+    'Pizza Homemade',
+    'pizza-homemade',
+    'Pizza fresh dengan topping pilihan. Cocok untuk snack atau makan bersama keluarga.',
+    22000,
+    true,
+    2,
+    true,
+    true,
+    true
+FROM categories c
+WHERE c.slug = 'pizza-savory'
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO product_variants (product_id, name, price_adjustment, is_active, display_order)
+SELECT
+    p.id,
+    v.name,
+    v.price_adjustment,
+    true,
+    v.display_order
+FROM products p
+JOIN categories c ON p.category_id = c.id
+JOIN (
+    VALUES
+        ('Mozzarella (Ukuran Kecil)', 0, 1),
+        ('Smoke Beef + Mozzarella', 28000, 2),
+        ('Mozzarella + Sosis', 23000, 3)
+) AS v(name, price_adjustment, display_order) ON p.slug = 'pizza-homemade' AND c.slug = 'pizza-savory'
+ON CONFLICT DO NOTHING;
