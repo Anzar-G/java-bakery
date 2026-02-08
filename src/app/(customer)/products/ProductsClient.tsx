@@ -97,7 +97,7 @@ export default function ProductsClient() {
                 return
             }
 
-            setProducts(Array.isArray(data) ? (data as any) : [])
+            setProducts((data || []) as CatalogProduct[])
         }
 
         fetchProducts()
@@ -149,7 +149,7 @@ export default function ProductsClient() {
                     <p className="text-slate-500 dark:text-slate-400 mt-1">Showing 12 of 48 fresh baked items</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider text-xs">Sort by:</span>
+                    <span className="font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider text-sm">Sort by:</span>
                     <Select value={sort} onValueChange={setSort}>
                         <SelectTrigger className="w-[180px] bg-white dark:bg-surface-dark border-slate-200 dark:border-slate-800 rounded-lg">
                             <SelectValue placeholder="Sort by" />
@@ -254,7 +254,7 @@ export default function ProductsClient() {
                 </aside>
 
                 <div className="flex-1">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 md:gap-4 lg:gap-6">
                         {products.map((p) => (
                             <ProductCard
                                 key={p.id}

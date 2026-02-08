@@ -1,11 +1,10 @@
 import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowRight, ShoppingCart, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Card } from '@/components/ui/card'
 import { createClient } from '@supabase/supabase-js'
+import { ProductCard } from '@/components/product/ProductCard'
 
 type Category = {
   id: string
@@ -22,6 +21,7 @@ type BestSeller = {
   description: string | null
   featured_image: string | null
   is_pre_order: boolean
+  rating_average: number | null
 }
 
 function supabaseServer() {
@@ -56,8 +56,8 @@ export default async function HomePage() {
       .limit(3),
   ])
 
-  const categories: Category[] = Array.isArray(categoriesData) ? (categoriesData as any) : []
-  const bestSellers: BestSeller[] = Array.isArray(bestSellersData) ? (bestSellersData as any) : []
+  const categories = (categoriesData || []) as Category[]
+  const bestSellers = (bestSellersData || []) as BestSeller[]
 
   return (
     <div className="max-w-7xl mx-auto px-6 lg:px-20 overflow-hidden">
@@ -119,7 +119,7 @@ export default async function HomePage() {
             <p className="text-deep-brown/60 dark:text-white/60">Choose your favorite treat for the next batch</p>
           </div>
           <Link href="/products" className="text-primary font-bold flex items-center gap-1 hover:underline underline-offset-4">
-            View All Categories <ArrowRight className="w-4 h-4" />
+            View All Categories
           </Link>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
@@ -130,7 +130,7 @@ export default async function HomePage() {
               className="group relative aspect-square rounded-2xl overflow-hidden cursor-pointer block"
             >
               <Image
-                src={(cat as any).image_url || fallbackImage()}
+                src={cat.image_url || fallbackImage()}
                 alt={cat.name}
                 fill
                 className="object-cover transition-transform duration-500 group-hover:scale-110"
@@ -158,36 +158,22 @@ export default async function HomePage() {
             </Button>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 md:gap-6">
           {bestSellers.map((product) => (
-            <Card key={product.id} className="bg-white dark:bg-white/5 p-4 rounded-2xl shadow-sm hover:shadow-xl transition-all group border-none">
-              <Link href={`/products/${encodeURIComponent(product.slug)}`} className="block">
-                <div className="relative rounded-xl overflow-hidden aspect-[4/3] mb-4">
-                  <Image
-                    src={product.featured_image || fallbackImage()}
-                    alt={product.name}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  {(product.is_pre_order) && (
-                    <Badge className="absolute top-3 left-3 bg-terracotta text-white border-none">
-                      PRE-ORDER
-                    </Badge>
-                  )}
-                </div>
-                <h5 className="font-bold text-lg mb-1">{product.name}</h5>
-                <p className="text-sm text-gray-500 mb-4 line-clamp-2">{product.description ?? ''}</p>
-              </Link>
-              <div className="flex items-center justify-between mt-auto">
-                <span className="text-xl font-extrabold text-primary">Rp {Number(product.base_price ?? 0).toLocaleString()}</span>
-                <Button asChild className="bg-primary text-white p-2 rounded-lg flex items-center gap-2 hover:bg-primary/90">
-                  <Link href={`/products/${encodeURIComponent(product.slug)}`}>
-                    <ShoppingCart className="w-4 h-4" />
-                    <span className="text-xs font-bold">View</span>
-                  </Link>
-                </Button>
-              </div>
-            </Card>
+            <ProductCard
+              key={product.id}
+              product={{
+                id: product.id,
+                name: product.name,
+                slug: product.slug,
+                price: product.base_price,
+                description: product.description ?? '',
+                image: product.featured_image || fallbackImage(),
+                rating: 5, // Default rating as it's not in the best seller query currently
+                isPreOrder: product.is_pre_order,
+                badge: 'Best Seller'
+              }}
+            />
           ))}
         </div>
       </section>

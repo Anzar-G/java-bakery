@@ -62,10 +62,10 @@ export function Footer() {
                 <div>
                     <h6 className="font-bold mb-6">Quick Links</h6>
                     <ul className="space-y-4 text-sm text-gray-500">
-                        <li><Link href="/products" className="hover:text-primary transition-colors">Shop All</Link></li>
-                        <li><Link href="/schedule" className="hover:text-primary transition-colors">Baking Schedule</Link></li>
-                        <li><Link href="/shipping" className="hover:text-primary transition-colors">Shipping Info</Link></li>
-                        <li><Link href="/bulk" className="hover:text-primary transition-colors">Bulk Orders</Link></li>
+                        <li><Link href="/products" className="hover:text-primary transition-colors break-all">Shop All</Link></li>
+                        <li><Link href="/schedule" className="hover:text-primary transition-colors break-all">Baking Schedule</Link></li>
+                        <li><Link href="/shipping" className="hover:text-primary transition-colors break-all">Shipping Info</Link></li>
+                        <li><Link href="/bulk" className="hover:text-primary transition-colors break-all">Bulk Orders</Link></li>
                     </ul>
                 </div>
 

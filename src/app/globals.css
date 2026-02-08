@@ -1,5 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+
+html,
+body {
+  height: 100%;
+}
+
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -91,6 +97,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground font-sans selection:bg-primary/30;
   }
@@ -141,6 +148,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }

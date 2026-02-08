@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Search, ShoppingBasket, Menu, X, User } from 'lucide-react'
+import { Search, ShoppingBasket, User } from 'lucide-react'
 import { useCartStore } from '@/store/useCartStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,13 +10,18 @@ import { cn } from '@/lib/utils'
 
 export function Header() {
     const [isScrolled, setIsScrolled] = useState(false)
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-    const [mounted, setMounted] = useState(false)
     const [storeName, setStoreName] = useState('Warm Oven')
     const totalItems = useCartStore((state) => state.getTotalItems())
+    const [mounted, setMounted] = useState(false)
 
     useEffect(() => {
-        setMounted(true)
+        const timer = setTimeout(() => {
+            setMounted(true)
+        }, 0)
+        return () => clearTimeout(timer)
+    }, [])
+
+    useEffect(() => {
         const handleScroll = () => {
             setIsScrolled(window.scrollY > 0)
         }
@@ -49,96 +54,70 @@ export function Header() {
     }, [])
 
     return (
-        <header
-            className={cn(
-                'sticky top-0 z-50 w-full transition-all duration-300 px-6 lg:px-20 py-4 border-b',
-                isScrolled
-                    ? 'bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-[#f1eee9] dark:border-white/10'
-                    : 'bg-transparent border-transparent'
-            )}
-        >
-            <div className="max-w-7xl mx-auto flex items-center justify-between">
-                <div className="flex items-center gap-12">
-                    {/* Logo */}
-                    <Link href="/" className="flex items-center gap-3 group">
-                        <div className="bg-primary p-1.5 rounded-lg text-white group-hover:scale-110 transition-transform">
-                            <ShoppingBasket className="w-6 h-6" />
+        <>
+            <header
+                className={cn(
+                    'sticky top-0 z-99 w-full transition-all duration-300 border-b',
+                    isScrolled
+                        ? 'bg-white/95 dark:bg-surface-dark/95 backdrop-blur-md shadow-sm border-slate-100 dark:border-slate-800'
+                        : 'bg-white dark:bg-surface-dark border-transparent'
+                )}
+            >
+                <div className="max-w-7xl mx-auto flex items-center justify-between px-4 py-2 h-[60px] gap-4">
+                    {/* Logo - Hide on mobile if search needs space, or keep small */}
+                    <Link href="/" className="flex items-center gap-2 group shrink-0">
+                        <div className="bg-[#EE4D2D] p-1.5 rounded-lg text-white">
+                            <ShoppingBasket className="w-5 h-5" />
                         </div>
-                        <h1 className="text-deep-brown dark:text-white text-xl font-extrabold tracking-tight">
+                        <h1 className="hidden md:block text-[#EE4D2D] text-lg font-extrabold tracking-tight">
                             {storeName}
                         </h1>
                     </Link>
 
-                    {/* Desktop Nav */}
-                    <nav className="hidden md:flex items-center gap-8">
-                        <Link href="/products" className="text-sm font-semibold hover:text-primary transition-colors">
-                            Menu
-                        </Link>
-                        <Link href="/pre-order" className="text-sm font-semibold hover:text-primary transition-colors">
-                            Pre-Order
-                        </Link>
-                        <Link href="/reviews" className="text-sm font-semibold hover:text-primary transition-colors">
-                            Reviews
-                        </Link>
-                        <Link href="/faq" className="text-sm font-semibold hover:text-primary transition-colors">
-                            FAQ
-                        </Link>
-                    </nav>
-                </div>
-
-                <div className="flex items-center gap-4 lg:gap-6">
-                    {/* Search */}
-                    <div className="hidden sm:flex items-center bg-[#f1eee9] dark:bg-white/5 rounded-xl px-4 py-1 border border-transparent focus-within:border-primary/30 transition-all">
-                        <Search className="text-gray-500 w-4 h-4" />
-                        <Input
-                            className="bg-transparent border-none focus-visible:ring-0 text-sm w-32 lg:w-48 placeholder:text-gray-400 h-9"
-                            placeholder="Search treats..."
-                        />
+                    {/* Search Bar - Flex 1 to take available space */}
+                    <div className="flex-1 max-w-2xl">
+                        <div className="relative group">
+                            <Input
+                                className="w-full bg-[#f5f5f5] dark:bg-slate-800 border-none rounded-full px-4 py-2 pl-10 h-[38px] focus-visible:ring-1 focus-visible:ring-[#EE4D2D] transition-all"
+                                placeholder="Cari di Toko ini"
+                            />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#EE4D2D]" />
+                            <Button size="sm" className="absolute right-1 top-0.5 bottom-0.5 bg-[#EE4D2D] hover:bg-[#d03e1f] text-white rounded-full h-auto px-4">
+                                Cari
+                            </Button>
+                        </div>
                     </div>
 
-                    {/* Cart */}
-                    <Button
-                        asChild
-                        variant="ghost"
-                        size="icon"
-                        className="relative bg-[#f1eee9] dark:bg-white/5 rounded-xl text-deep-brown dark:text-white hover:bg-primary/10 transition-colors"
-                    >
-                        <Link href="/cart" aria-label="Keranjang">
-                            <ShoppingBasket className="w-5 h-5" />
+                    <div className="flex items-center gap-2 shrink-0">
+                        {/* Desktop Nav */}
+                        <nav className="hidden md:flex items-center gap-6 mr-4">
+                            <Link href="/products" className="text-sm font-medium hover:text-[#EE4D2D] transition-colors">
+                                Menu
+                            </Link>
+                            <Link href="/reviews" className="text-sm font-medium hover:text-[#EE4D2D] transition-colors">
+                                Reviews
+                            </Link>
+                        </nav>
+
+                        {/* Cart */}
+                        <Link href="/cart" className="relative p-2 text-slate-600 dark:text-slate-200 hover:text-[#EE4D2D] transition-colors">
+                            <ShoppingBasket className="w-6 h-6" />
                             {mounted && totalItems > 0 && (
-                                <span className="absolute -top-1 -right-1 bg-terracotta text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                <span className="absolute top-0 right-0 bg-[#EE4D2D] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white dark:border-surface-dark">
                                     {totalItems}
                                 </span>
                             )}
                         </Link>
-                    </Button>
 
-                    {/* Profile */}
-                    <Button variant="ghost" size="icon" className="w-10 h-10 rounded-full border-2 border-primary/20 p-0 overflow-hidden">
-                        <User className="w-5 h-5" />
-                    </Button>
-
-                    {/* Mobile Menu Toggle */}
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="md:hidden"
-                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                    >
-                        {isMobileMenuOpen ? <X /> : <Menu />}
-                    </Button>
+                        {/* Profile - Desktop only */}
+                        <div className="hidden md:block">
+                            <Button variant="ghost" size="icon" className="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-700">
+                                <User className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    </div>
                 </div>
-            </div>
-
-            {/* Mobile Menu */}
-            {isMobileMenuOpen && (
-                <div className="md:hidden absolute top-full left-0 w-full bg-background border-b p-6 space-y-4 animate-in slide-in-from-top duration-300">
-                    <Link href="/products" className="block text-lg font-semibold py-2">Menu</Link>
-                    <Link href="/pre-order" className="block text-lg font-semibold py-2">Pre-Order</Link>
-                    <Link href="/reviews" className="block text-lg font-semibold py-2">Reviews</Link>
-                    <Link href="/faq" className="block text-lg font-semibold py-2">FAQ</Link>
-                </div>
-            )}
-        </header>
+            </header>
+        </>
     )
 }
