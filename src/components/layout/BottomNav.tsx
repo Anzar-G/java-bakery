@@ -3,7 +3,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Zap, ShoppingCart, MessageCircle, User } from 'lucide-react'
+import { Home, CalendarCheck, ShoppingCart, Star, HelpCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function BottomNav() {
@@ -11,10 +11,10 @@ export function BottomNav() {
 
     const navItems = [
         { icon: Home, label: 'Home', href: '/' },
-        { icon: Zap, label: 'Flash Sale', href: '/products?availability=preorder' }, // Using Pre-Order as proxy for Flash Sale
+        { icon: CalendarCheck, label: 'Pre-Order', href: '/pre-order' },
         { icon: ShoppingCart, label: 'Cart', href: '/cart' },
-        { icon: MessageCircle, label: 'Chat', href: '#' }, // Placeholder
-        { icon: User, label: 'Profile', href: '/profile' }, // Placeholder or actual profile
+        { icon: Star, label: 'Reviews', href: '/reviews' },
+        { icon: HelpCircle, label: 'FAQ', href: '/faq' },
     ]
 
     return (
