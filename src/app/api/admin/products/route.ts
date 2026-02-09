@@ -92,18 +92,34 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: false, error: admin.error }, { status: admin.status })
         }
 
+        const { searchParams } = new URL(request.url)
+        const page = Math.max(1, Number(searchParams.get('page') ?? '1'))
+        const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? '20'), 1), 100)
+        const offset = (page - 1) * limit
+
+        // Get total count
+        const { count, error: countError } = await admin.supabase
+            .from('products')
+            .select('*', { count: 'exact', head: true })
+
+        if (countError) {
+            return NextResponse.json({ success: false, error: countError.message }, { status: 500 })
+        }
+
+        // Get paginated data
         const { data, error } = await admin.supabase
             .from('products')
             .select(
                 'id, name, slug, category_id, featured_image, base_price, is_active, is_pre_order, pre_order_days, shipping_local_only, created_at, category:categories!products_category_id_fkey(id, name)'
             )
             .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1)
 
         if (error) {
             return NextResponse.json({ success: false, error: error.message }, { status: 500 })
         }
 
-        return NextResponse.json({ success: true, products: data ?? [] })
+        return NextResponse.json({ success: true, products: data ?? [], count: count ?? 0 })
     } catch (e) {
         const message = e instanceof Error ? e.message : 'Unknown error'
         return NextResponse.json({ success: false, error: message }, { status: 500 })

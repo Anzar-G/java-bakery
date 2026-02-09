@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { Eye, RefreshCcw, ShoppingBag } from 'lucide-react'
+import { Eye, RefreshCcw, ShoppingBag, Trash2 } from 'lucide-react'
 
 type OrderRow = {
     id: string
@@ -80,6 +80,14 @@ export default function AdminOrdersPage() {
     const [error, setError] = useState<string>('')
     const [orders, setOrders] = useState<OrderRow[]>([])
 
+    // Pagination state
+    const [page, setPage] = useState(1)
+    const [pageSize, setPageSize] = useState(20)
+    const [totalCount, setTotalCount] = useState(0)
+
+    // Selection state
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
     const [open, setOpen] = useState(false)
     const [detailLoading, setDetailLoading] = useState(false)
     const [detailError, setDetailError] = useState('')
@@ -95,22 +103,27 @@ export default function AdminOrdersPage() {
         setLoading(true)
         setError('')
         try {
-            const res = await fetch('/api/admin/orders')
+            const res = await fetch(`/api/admin/orders?page=${page}&limit=${pageSize}`)
             const json = await res.json()
 
             if (!res.ok || !json?.success) {
                 setError(json?.error ?? 'Gagal memuat orders')
                 setOrders([])
+                setTotalCount(0)
                 setLoading(false)
                 return
             }
 
             setOrders(Array.isArray(json.orders) ? json.orders : [])
+            setTotalCount(json.count ?? json.orders?.length ?? 0)
+            setSelectedIds(new Set())
             setLoading(false)
         } catch (e) {
             const message = e instanceof Error ? e.message : 'Gagal memuat orders'
             setError(message)
             setOrders([])
+            setTotalCount(0)
+            setSelectedIds(new Set())
             setLoading(false)
         }
     }
@@ -118,12 +131,60 @@ export default function AdminOrdersPage() {
     useEffect(() => {
         fetchOrders()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [page, pageSize])
 
     const paidCount = useMemo(
         () => orders.filter((o) => String(o.payment_status).toLowerCase() === 'paid').length,
         [orders]
     )
+
+    const toggleSelected = (id: string, checked: boolean) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev)
+            if (checked) next.add(id)
+            else next.delete(id)
+            return next
+        })
+    }
+
+    const allSelected = useMemo(() => {
+        return orders.length > 0 && orders.every((o) => selectedIds.has(o.id))
+    }, [orders, selectedIds])
+
+    const toggleAll = (checked: boolean) => {
+        setSelectedIds(() => {
+            if (!checked) return new Set()
+            return new Set(orders.map((o) => o.id))
+        })
+    }
+
+    const clearSelection = () => setSelectedIds(new Set())
+
+    const bulkDelete = async () => {
+        const ids = Array.from(selectedIds)
+        if (ids.length === 0) return
+        const ok = confirm(`Hapus ${ids.length} order terpilih?`)
+        if (!ok) return
+
+        try {
+            const res = await fetch('/api/admin/orders', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids }),
+            })
+            const json = await res.json().catch(() => null)
+            if (!res.ok || !json?.success) {
+                throw new Error(json?.error ?? 'Gagal menghapus orders')
+            }
+
+            setOrders((prev) => prev.filter((o) => !selectedIds.has(o.id)))
+            setSelectedIds(new Set())
+            toast.success('Order terpilih berhasil dihapus')
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Gagal menghapus orders'
+            toast.error(message)
+        }
+    }
 
     const openDetail = async (orderId: string) => {
         setSelectedOrderId(orderId)
@@ -237,16 +298,93 @@ export default function AdminOrdersPage() {
                 )}
             </div>
 
+            {/* Sticky Bulk Action Bar */}
+            {selectedIds.size > 0 && (
+                <div className="sticky top-0 z-30 bg-white/95 dark:bg-[#2a241c]/95 backdrop-blur border border-[#f1eee9] dark:border-[#3a342a] rounded-xl p-3 shadow-lg flex items-center justify-between gap-3">
+                    <div className="text-sm font-bold">
+                        {selectedIds.size} terpilih
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            onClick={clearSelection}
+                            variant="outline"
+                            className="h-9 px-3 text-xs font-bold border-[#f1eee9] dark:border-[#3a342a]"
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            onClick={bulkDelete}
+                            variant="outline"
+                            className="h-9 px-3 text-xs font-bold border-red-500/30 text-red-600 hover:bg-red-500/10"
+                            disabled={loading}
+                        >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Hapus
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             <Card className="border-[#f1eee9] dark:border-[#3a342a] bg-white dark:bg-[#2a241c] rounded-2xl shadow-sm">
                 <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="text-lg font-bold">Daftar Orders</CardTitle>
                     <Badge className="bg-primary/10 text-primary border-none">{loading ? '...' : `${orders.length} orders`}</Badge>
                 </CardHeader>
                 <CardContent>
-                    <div className="overflow-x-auto">
+                    <div className="md:hidden space-y-3">
+                        {loading && <div className="py-8 text-center text-sm text-[#8b775b]">Loading...</div>}
+                        {!loading && orders.length === 0 && (
+                            <div className="py-8 text-center text-sm text-[#8b775b]">Belum ada pesanan.</div>
+                        )}
+                        {!loading &&
+                            orders.map((o) => (
+                                <div
+                                    key={o.id}
+                                    className="rounded-2xl border border-[#f1eee9] dark:border-[#3a342a] p-4 bg-white dark:bg-[#2a241c]"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="text-xs text-[#8b775b] font-bold uppercase tracking-wider">#{o.order_number}</p>
+                                            <p className="font-black truncate mt-1">{o.customer_name}</p>
+                                            <p className="text-xs text-[#8b775b] truncate">{o.customer_phone}</p>
+                                        </div>
+                                        <Button
+                                            onClick={() => openDetail(o.id)}
+                                            variant="outline"
+                                            className="border-primary/20 text-primary hover:bg-primary/10"
+                                        >
+                                            Detail
+                                        </Button>
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        <Badge
+                                            className={cn(
+                                                'border-none',
+                                                String(o.payment_status).toLowerCase() === 'paid'
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : 'bg-amber-100 text-amber-700'
+                                            )}
+                                        >
+                                            {o.payment_status}
+                                        </Badge>
+                                        <Badge className={cn('border-none', 'bg-primary/10 text-primary')}>{o.status}</Badge>
+                                        <Badge className="border-none bg-primary/10 text-primary">{formatIDR(o.total_amount)}</Badge>
+                                    </div>
+                                </div>
+                            ))}
+                    </div>
+
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="border-b border-[#f1eee9] dark:border-[#3a342a] text-[#8b775b] text-xs font-bold uppercase tracking-wider">
+                                    <th className="pb-4 w-10">
+                                        <input
+                                            type="checkbox"
+                                            checked={allSelected}
+                                            onChange={(e) => toggleAll(e.target.checked)}
+                                        />
+                                    </th>
                                     <th className="pb-4">No Order</th>
                                     <th className="pb-4">Customer</th>
                                     <th className="pb-4">Status</th>
@@ -275,6 +413,13 @@ export default function AdminOrdersPage() {
                                 {!loading &&
                                     orders.map((o) => (
                                         <tr key={o.id} className="group hover:bg-primary/5 transition-all">
+                                            <td className="py-4">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedIds.has(o.id)}
+                                                    onChange={(e) => toggleSelected(o.id, e.target.checked)}
+                                                />
+                                            </td>
                                             <td className="py-4 font-bold text-sm">#{o.order_number}</td>
                                             <td className="py-4">
                                                 <p className="text-sm font-bold">{o.customer_name}</p>
@@ -322,11 +467,40 @@ export default function AdminOrdersPage() {
                             </tbody>
                         </table>
                     </div>
+                    {/* Pagination */}
+                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-[#f1eee9] dark:border-[#3a342a]">
+                        <div className="text-sm text-[#8b775b]">
+                            Showing {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page <= 1 || loading}
+                                className="h-8 px-3 text-xs font-bold border-[#f1eee9] dark:border-[#3a342a]"
+                            >
+                                Prev
+                            </Button>
+                            <span className="text-sm font-bold px-2">
+                                {page}
+                            </span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage(p => p + 1)}
+                                disabled={page * pageSize >= totalCount || loading}
+                                className="h-8 px-3 text-xs font-bold border-[#f1eee9] dark:border-[#3a342a]"
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
 
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="sm:max-w-[720px]">
+                <DialogContent className="sm:max-w-[720px] max-h-[90vh] flex flex-col overflow-hidden">
                     <DialogHeader>
                         <DialogTitle>Detail Order</DialogTitle>
                         <DialogDescription>Update status dan payment status secara manual.</DialogDescription>
@@ -336,7 +510,7 @@ export default function AdminOrdersPage() {
                     {detailError && <div className="py-6 text-sm text-red-600 font-semibold">{detailError}</div>}
 
                     {!detailLoading && !detailError && detail && (
-                        <div className="space-y-6">
+                        <div className="space-y-6 overflow-y-auto pr-1">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="rounded-xl border border-[#f1eee9] dark:border-[#3a342a] p-4">
                                     <p className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Order</p>

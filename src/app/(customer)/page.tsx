@@ -164,26 +164,55 @@ export default async function HomePage() {
             {categoriesCta}
           </Link>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-          {categories.map((cat) => (
-            <Link
-              key={cat.id}
-              href={`/products?category=${encodeURIComponent(cat.slug)}`}
-              className="group relative aspect-square rounded-2xl overflow-hidden cursor-pointer block"
-            >
-              <Image
-                src={cat.image_url || fallbackImage()}
-                alt={cat.name}
-                fill
-                className="object-cover transition-transform duration-500 group-hover:scale-110"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-              <div className="absolute bottom-6 left-6 text-white">
-                <h4 className="font-bold text-xl mb-1">{cat.name}</h4>
-                <p className="opacity-70 text-sm">View products</p>
-              </div>
-            </Link>
-          ))}
+        <div className="-mx-6 px-6 md:mx-0 md:px-0">
+          <div className="relative md:hidden">
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-[#fbfaf9] dark:from-[#1e1a14] to-transparent z-10" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-[#fbfaf9] dark:from-[#1e1a14] to-transparent z-10" />
+
+            <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory">
+              {categories.map((cat) => (
+                <Link
+                  key={cat.id}
+                  href={`/products?category=${encodeURIComponent(cat.slug)}`}
+                  className="group relative w-44 shrink-0 aspect-square rounded-2xl overflow-hidden cursor-pointer block snap-start"
+                >
+                  <Image
+                    src={cat.image_url || fallbackImage()}
+                    alt={cat.name}
+                    fill
+                    className="object-cover transition-transform duration-500 group-hover:scale-110"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                  <div className="absolute bottom-4 left-4 right-4 text-white">
+                    <h4 className="font-bold text-base leading-tight">{cat.name}</h4>
+                    <p className="opacity-70 text-xs mt-1">View products</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+            {categories.map((cat) => (
+              <Link
+                key={cat.id}
+                href={`/products?category=${encodeURIComponent(cat.slug)}`}
+                className="group relative aspect-square rounded-2xl overflow-hidden cursor-pointer block"
+              >
+                <Image
+                  src={cat.image_url || fallbackImage()}
+                  alt={cat.name}
+                  fill
+                  className="object-cover transition-transform duration-500 group-hover:scale-110"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                <div className="absolute bottom-6 left-6 text-white">
+                  <h4 className="font-bold text-xl mb-1">{cat.name}</h4>
+                  <p className="opacity-70 text-sm">View products</p>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -192,7 +221,7 @@ export default async function HomePage() {
         <section className="py-16 bg-primary/5 -mx-6 lg:-mx-20 px-6 lg:px-20 rounded-[2.5rem]">
           <div className="flex items-center justify-between mb-10">
             <h3 className="text-3xl font-extrabold">{bestSellersTitle}</h3>
-            <div className="flex gap-2">
+            <div className="hidden md:flex gap-2">
               <Button variant="outline" size="icon" className="rounded-full border-primary/20 hover:bg-primary hover:text-white">
                 <ChevronLeft className="w-5 h-5" />
               </Button>
@@ -201,23 +230,50 @@ export default async function HomePage() {
               </Button>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 md:gap-6">
-            {bestSellers.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={{
-                  id: product.id,
-                  name: product.name,
-                  slug: product.slug,
-                  price: product.base_price,
-                  description: product.description ?? '',
-                  image: product.featured_image || fallbackImage(),
-                  rating: product.rating_average ?? 0,
-                  isPreOrder: product.is_pre_order,
-                  badge: 'Best Seller'
-                }}
-              />
-            ))}
+          <div className="-mx-6 px-6 md:mx-0 md:px-0">
+            <div className="relative md:hidden">
+              <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-[#fbfaf9] dark:from-[#1e1a14] to-transparent z-10" />
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-[#fbfaf9] dark:from-[#1e1a14] to-transparent z-10" />
+
+              <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory">
+                {bestSellers.map((product) => (
+                  <div key={product.id} className="shrink-0 w-[240px] snap-start">
+                    <ProductCard
+                      product={{
+                        id: product.id,
+                        name: product.name,
+                        slug: product.slug,
+                        price: product.base_price,
+                        description: product.description ?? '',
+                        image: product.featured_image || fallbackImage(),
+                        rating: product.rating_average ?? 0,
+                        isPreOrder: product.is_pre_order,
+                        badge: 'Best Seller',
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="hidden md:grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 md:gap-6">
+              {bestSellers.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={{
+                    id: product.id,
+                    name: product.name,
+                    slug: product.slug,
+                    price: product.base_price,
+                    description: product.description ?? '',
+                    image: product.featured_image || fallbackImage(),
+                    rating: product.rating_average ?? 0,
+                    isPreOrder: product.is_pre_order,
+                    badge: 'Best Seller',
+                  }}
+                />
+              ))}
+            </div>
           </div>
         </section>
       )}

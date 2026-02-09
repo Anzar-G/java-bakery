@@ -28,6 +28,8 @@ export default function AdminDashboardPage() {
         }>
     >([])
 
+    const [bestSellers, setBestSellers] = useState<Array<{ product_name: string; qty: number }>>([])
+
     useEffect(() => {
         let cancelled = false
 
@@ -54,6 +56,7 @@ export default function AdminDashboardPage() {
                     totalCustomers: Number(json.stats?.totalCustomers ?? 0),
                 })
                 setRecentOrders(Array.isArray(json.recentOrders) ? json.recentOrders : [])
+                setBestSellers(Array.isArray(json.bestSellers) ? json.bestSellers : [])
                 setLoading(false)
             } catch (e) {
                 if (cancelled) return
@@ -166,14 +169,22 @@ export default function AdminDashboardPage() {
                         <CardTitle className="text-lg font-bold">Best Sellers</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        {BEST_SELLERS_ADMIN.map((item, idx) => (
-                            <div key={idx} className="flex items-center gap-4">
+                        {loading && (
+                            <div className="py-8 text-center text-sm text-[#8b775b]">Loading...</div>
+                        )}
+
+                        {!loading && bestSellers.length === 0 && (
+                            <div className="py-8 text-center text-sm text-[#8b775b]">Belum ada data penjualan (paid) 7 hari terakhir.</div>
+                        )}
+
+                        {!loading && bestSellers.map((item, idx) => (
+                            <div key={`${item.product_name}-${idx}`} className="flex items-center gap-4">
                                 <div className="size-12 rounded-xl bg-primary/10 flex items-center justify-center font-bold text-primary">#{idx + 1}</div>
-                                <div className="flex-1">
-                                    <p className="font-bold text-sm">{item.name}</p>
-                                    <p className="text-xs text-[#8b775b]">{item.sales} sales this week</p>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-sm truncate">{item.product_name}</p>
+                                    <p className="text-xs text-[#8b775b]">{item.qty} item terjual (7 hari)</p>
                                 </div>
-                                <p className="font-bold text-sm text-primary">+{item.growth}%</p>
+                                <p className="font-bold text-sm text-primary">{item.qty}</p>
                             </div>
                         ))}
                     </CardContent>
@@ -210,9 +221,3 @@ function StatCard({ title, value, trend, icon: Icon, positive }: StatCardProps) 
         </Card>
     )
 }
-
-const BEST_SELLERS_ADMIN = [
-    { name: 'Nastar Wisman', sales: 124, growth: 12 },
-    { name: 'Sourdough Loaf', sales: 98, growth: 8 },
-    { name: 'Sea Salt Brownies', sales: 85, growth: 15 },
-]

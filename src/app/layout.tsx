@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { PwaRegister } from "@/components/PwaRegister";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -45,6 +46,8 @@ export const metadata: Metadata = {
     description: "Aneka kue kering, brownies, donat, dan pizza homemade. Pre-order untuk kualitas terbaik.",
     images: ['/favicon.png'],
   },
+  applicationName: 'Bakery Umi',
+  themeColor: '#EE4D2D',
 };
 
 export default function RootLayout({
@@ -57,6 +60,7 @@ export default function RootLayout({
       <body
         className={`${plusJakartaSans.variable} font-sans antialiased bg-background-light dark:bg-background-dark text-deep-brown dark:text-background-light`}
       >
+        <PwaRegister />
         {children}
         <Toaster />
       </body>

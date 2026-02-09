@@ -88,14 +88,14 @@ export function ProductCard({ product }: ProductCardProps) {
 
             <div className="p-2 flex flex-col flex-1">
                 {/* Title: 2 lines max, 14px */}
-                <h3 className="text-[13px] leading-[17px] h-[34px] font-normal text-slate-800 dark:text-slate-100 line-clamp-2 mb-2">
+                <h3 className="text-[12px] leading-[16px] h-[32px] font-normal text-slate-800 dark:text-slate-100 line-clamp-2 mb-2">
                     {product.name}
                 </h3>
 
                 <div className="mt-auto">
                     <div className="flex items-center justify-between mb-2">
                         {/* Price: #EE4D2D, 16px font-bold */}
-                        <span className="text-[15px] font-bold text-[#EE4D2D]">
+                        <span className="text-[14px] font-bold text-[#EE4D2D]">
                             Rp {product.price.toLocaleString('id-ID')}
                         </span>
 

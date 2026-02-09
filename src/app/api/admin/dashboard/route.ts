@@ -4,6 +4,11 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 
 const ADMIN_EMAILS = new Set(['javabakery@java.com'])
 
+type BestSellerRow = {
+    product_name: string
+    qty: number
+}
+
 export async function GET(request: NextRequest) {
     try {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -107,6 +112,30 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: false, error: recentOrdersError.message }, { status: 500 })
         }
 
+        const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        const { data: bestSellerRows, error: bestSellerError } = await supabase
+            .from('order_items')
+            .select('product_name, quantity, orders!inner(payment_status, created_at)')
+            .eq('orders.payment_status', 'paid')
+            .gte('orders.created_at', since)
+
+        if (bestSellerError) {
+            return NextResponse.json({ success: false, error: bestSellerError.message }, { status: 500 })
+        }
+
+        const bestSellerMap = new Map<string, number>()
+        for (const r of bestSellerRows ?? []) {
+            const name = String((r as any).product_name ?? '').trim()
+            if (!name) continue
+            const qty = Number((r as any).quantity ?? 0)
+            bestSellerMap.set(name, (bestSellerMap.get(name) ?? 0) + (Number.isFinite(qty) ? qty : 0))
+        }
+
+        const bestSellers: BestSellerRow[] = Array.from(bestSellerMap.entries())
+            .map(([product_name, qty]) => ({ product_name, qty }))
+            .sort((a, b) => b.qty - a.qty)
+            .slice(0, 3)
+
         return NextResponse.json({
             success: true,
             stats: {
@@ -116,6 +145,7 @@ export async function GET(request: NextRequest) {
                 totalCustomers: uniqueCustomers.size,
             },
             recentOrders: recentOrders ?? [],
+            bestSellers,
         })
     } catch (e) {
         const message = e instanceof Error ? e.message : 'Unknown error'

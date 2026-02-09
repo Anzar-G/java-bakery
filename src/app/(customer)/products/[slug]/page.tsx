@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ProductGallery } from '@/components/product/ProductGallery'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -81,6 +81,27 @@ export default function ProductDetailPage() {
     const [approvedReviews, setApprovedReviews] = useState<ApprovedReview[]>([])
     const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null)
     const addItem = useCartStore((state) => state.addItem)
+
+    const [showMobileBar, setShowMobileBar] = useState(true)
+    const bottomSentinelRef = useRef<HTMLDivElement | null>(null)
+
+    useEffect(() => {
+        const el = bottomSentinelRef.current
+        if (!el) return
+
+        const obs = new IntersectionObserver(
+            (entries) => {
+                const entry = entries[0]
+                setShowMobileBar(!entry.isIntersecting)
+            },
+            { root: null, threshold: 0.01 }
+        )
+
+        obs.observe(el)
+        return () => {
+            obs.disconnect()
+        }
+    }, [])
 
     useEffect(() => {
         let cancelled = false
@@ -246,7 +267,7 @@ export default function ProductDetailPage() {
     }
 
     return (
-        <div className="max-w-4xl mx-auto p-4 md:p-6">
+        <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24 md:pb-6">
             {/* Breadcrumb */}
             <nav className="flex items-center gap-2 text-sm text-slate-500 mb-6 overflow-x-auto whitespace-nowrap">
                 <Link href="/" className="hover:text-primary">Home</Link>
@@ -488,6 +509,38 @@ export default function ProductDetailPage() {
                     </div>
                 </Tabs>
             </div>
+
+            <div className={cn('md:hidden fixed left-0 right-0 bottom-[72px] z-40 transition-all duration-200', showMobileBar ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3 pointer-events-none')}>
+                <div className="mx-auto max-w-4xl px-4">
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-surface-dark/95 backdrop-blur px-4 py-3 shadow-lg">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total</div>
+                                <div className="font-black text-primary truncate">Rp {(unitPrice * quantity).toLocaleString('id-ID')}</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={handleAddToCart}
+                                    className="h-11 rounded-xl font-bold"
+                                >
+                                    Tambah
+                                </Button>
+                                <Button
+                                    type="button"
+                                    onClick={handleBuyNow}
+                                    className="h-11 rounded-xl font-black bg-primary text-white"
+                                >
+                                    Beli
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div ref={bottomSentinelRef} className="h-px" />
             </>
             )}
         </div>

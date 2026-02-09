@@ -122,7 +122,7 @@ export default function CartPage() {
     }
 
     return (
-        <div className="max-w-7xl mx-auto w-full px-6 py-8">
+        <div className="max-w-7xl mx-auto w-full px-6 py-8 pb-28 lg:pb-8">
             {/* Breadcrumbs */}
             <div className="flex items-center gap-2 mb-6">
                 <Link href="/" className="text-[#8b775b] text-sm font-medium hover:text-primary transition-colors">Beranda</Link>
@@ -261,6 +261,25 @@ export default function CartPage() {
                                 <ShieldCheck className="text-primary w-5 h-5" />
                                 <span>Pembayaran aman & terenkripsi</span>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Mobile Sticky Checkout Bar */}
+            <div className="lg:hidden fixed left-0 right-0 bottom-[72px] z-40">
+                <div className="mx-auto max-w-7xl px-6">
+                    <div className="rounded-2xl border border-[#f1eee9] dark:border-[#3a342a] bg-white/95 dark:bg-[#2a241c]/95 backdrop-blur shadow-lg overflow-hidden">
+                        <div className="w-full px-4 py-3 flex items-center justify-between gap-4">
+                            <div className="text-left min-w-0">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-[#8b775b]">Total</div>
+                                <div className="font-black text-primary truncate">Rp {total.toLocaleString()}</div>
+                            </div>
+                            <Button asChild className="h-10 rounded-full font-black bg-primary text-white px-6">
+                                <Link href={province ? `/checkout?province=${encodeURIComponent(province)}` : '/checkout'}>
+                                    Checkout <ArrowRight className="w-4 h-4 ml-1" />
+                                </Link>
+                            </Button>
                         </div>
                     </div>
                 </div>

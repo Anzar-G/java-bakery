@@ -241,7 +241,70 @@ export default function AdminReviewsPage() {
                     <Badge className="bg-primary/10 text-primary border-none">{loading ? '...' : `${reviews.length} items`}</Badge>
                 </CardHeader>
                 <CardContent>
-                    <div className="overflow-x-auto">
+                    <div className="md:hidden space-y-3">
+                        {loading && <div className="py-8 text-center text-sm text-[#8b775b]">Loading...</div>}
+                        {!loading && reviews.length === 0 && (
+                            <div className="py-8 text-center text-sm text-[#8b775b]">Belum ada review.</div>
+                        )}
+                        {!loading &&
+                            reviews.map((r) => {
+                                const p = normalizeProduct(r.product)
+                                return (
+                                    <div
+                                        key={r.id}
+                                        className="rounded-2xl border border-[#f1eee9] dark:border-[#3a342a] p-4 bg-white dark:bg-[#2a241c]"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="font-black truncate">{p?.name ?? '-'}</p>
+                                                <p className="text-xs text-[#8b775b] truncate mt-1">{p?.slug ? `/products/${p.slug}` : ''}</p>
+                                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                    <Badge
+                                                        className={cn(
+                                                            'border-none',
+                                                            r.is_approved ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                                                        )}
+                                                    >
+                                                        {r.is_approved ? 'Approved' : 'Pending'}
+                                                    </Badge>
+                                                    <Badge className="border-none bg-slate-100 text-slate-700">{r.rating}/5</Badge>
+                                                    <Badge className="border-none bg-slate-100 text-slate-700">
+                                                        {r.created_at ? new Date(r.created_at).toLocaleDateString('id-ID') : '-'}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedIds.has(r.id)}
+                                                    onChange={(e) => toggleSelected(r.id, e.target.checked)}
+                                                />
+                                                <Button
+                                                    onClick={() => openDetail(r)}
+                                                    variant="outline"
+                                                    className="border-primary/20 text-primary hover:bg-primary/10"
+                                                >
+                                                    Detail
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-3 flex items-center justify-end gap-2">
+                                            <Button
+                                                disabled={saving}
+                                                onClick={() => setApproval(r.id, !r.is_approved)}
+                                                variant={r.is_approved ? 'outline' : 'default'}
+                                                className={cn(r.is_approved ? 'border-primary/20 text-primary hover:bg-primary/10' : '')}
+                                            >
+                                                {r.is_approved ? 'Hide' : 'Approve'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                    </div>
+
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="border-b border-[#f1eee9] dark:border-[#3a342a] text-[#8b775b] text-xs font-bold uppercase tracking-wider">
@@ -351,14 +414,14 @@ export default function AdminReviewsPage() {
             </Card>
 
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="sm:max-w-[640px]">
+                <DialogContent className="sm:max-w-[640px] max-h-[90vh] flex flex-col overflow-hidden">
                     <DialogHeader>
                         <DialogTitle>Detail Review</DialogTitle>
                         <DialogDescription>Approve untuk menampilkan review di halaman customer.</DialogDescription>
                     </DialogHeader>
 
                     {selected && (
-                        <div className="space-y-4">
+                        <div className="space-y-4 overflow-y-auto pr-1">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-bold">{normalizeProduct(selected.product)?.name ?? '-'}</p>

@@ -193,7 +193,53 @@ export default function AdminCustomersPage() {
                     <Badge className="bg-primary/10 text-primary border-none">{loading ? '...' : `${filtered.length} customers`}</Badge>
                 </CardHeader>
                 <CardContent>
-                    <div className="overflow-x-auto">
+                    <div className="md:hidden space-y-3">
+                        {loading && <div className="py-8 text-center text-sm text-[#8b775b]">Loading...</div>}
+                        {!loading && filtered.length === 0 && (
+                            <div className="py-8 text-center text-sm text-[#8b775b]">Belum ada customer.</div>
+                        )}
+                        {!loading &&
+                            filtered.map((c) => (
+                                <div
+                                    key={c.customer_phone}
+                                    className="rounded-2xl border border-[#f1eee9] dark:border-[#3a342a] p-4 bg-white dark:bg-[#2a241c]"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="font-black truncate">{c.customer_name || '-'}</p>
+                                            <p className="text-xs text-[#8b775b] truncate mt-1">{c.customer_phone}</p>
+                                            <p className="text-xs text-[#8b775b] truncate">{c.customer_email ?? '-'}</p>
+                                        </div>
+                                        <div className="pt-1">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedPhones.has(c.customer_phone)}
+                                                onChange={(e) => toggleSelected(c.customer_phone, e.target.checked)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        <Badge
+                                            className={cn(
+                                                'border-none',
+                                                c.total_orders >= 3 ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700'
+                                            )}
+                                        >
+                                            Orders: {c.total_orders}
+                                        </Badge>
+                                        <Badge className="border-none bg-primary/10 text-primary">
+                                            Paid: {formatIDR(c.total_spent_paid)}
+                                        </Badge>
+                                        <Badge className="border-none bg-slate-100 text-slate-700">
+                                            Last: {c.last_order_at ? new Date(c.last_order_at).toLocaleDateString('id-ID') : '-'}
+                                        </Badge>
+                                    </div>
+                                </div>
+                            ))}
+                    </div>
+
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="border-b border-[#f1eee9] dark:border-[#3a342a] text-[#8b775b] text-xs font-bold uppercase tracking-wider">

@@ -74,6 +74,11 @@ export default function AdminProductsPage() {
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
+    // Pagination state
+    const [page, setPage] = useState(1)
+    const [pageSize, setPageSize] = useState(20)
+    const [totalCount, setTotalCount] = useState(0)
+
     const [categories, setCategories] = useState<AdminCategory[]>([])
 
     const [open, setOpen] = useState(false)
@@ -119,23 +124,26 @@ export default function AdminProductsPage() {
         setLoading(true)
         setError('')
         try {
-            const res = await fetch('/api/admin/products')
+            const res = await fetch(`/api/admin/products?page=${page}&limit=${pageSize}`)
             const json = await res.json()
 
             if (!res.ok || !json?.success) {
                 setError(json?.error ?? 'Gagal memuat produk')
                 setProducts([])
+                setTotalCount(0)
                 setLoading(false)
                 return
             }
 
             setProducts(Array.isArray(json.products) ? json.products : [])
+            setTotalCount(json.count ?? json.products?.length ?? 0)
             setSelectedIds(new Set())
             setLoading(false)
         } catch (e) {
             const message = e instanceof Error ? e.message : 'Gagal memuat produk'
             setError(message)
             setProducts([])
+            setTotalCount(0)
             setSelectedIds(new Set())
             setLoading(false)
         }
@@ -160,6 +168,8 @@ export default function AdminProductsPage() {
             return new Set(products.map((p) => p.id))
         })
     }
+
+    const clearSelection = () => setSelectedIds(new Set())
 
     const bulkDelete = async () => {
         const ids = Array.from(selectedIds)
@@ -224,6 +234,10 @@ export default function AdminProductsPage() {
 
     useEffect(() => {
         fetchProducts()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, pageSize])
+
+    useEffect(() => {
         fetchCategories()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
@@ -609,17 +623,6 @@ export default function AdminProductsPage() {
                         <Plus className="w-4 h-4" />
                         Add Product
                     </Button>
-                    {selectedIds.size > 0 && (
-                        <Button
-                            onClick={bulkDelete}
-                            variant="outline"
-                            className="border-red-500/30 text-red-600 hover:bg-red-500/10"
-                            disabled={loading}
-                        >
-                            <Trash2 className="w-4 h-4" />
-                            Hapus Terpilih ({selectedIds.size})
-                        </Button>
-                    )}
                     <Button
                         onClick={fetchProducts}
                         variant="outline"
@@ -630,6 +633,33 @@ export default function AdminProductsPage() {
                     </Button>
                 </div>
             </div>
+
+            {/* Sticky Bulk Action Bar */}
+            {selectedIds.size > 0 && (
+                <div className="sticky top-0 z-30 bg-white/95 dark:bg-[#2a241c]/95 backdrop-blur border border-[#f1eee9] dark:border-[#3a342a] rounded-xl p-3 shadow-lg flex items-center justify-between gap-3">
+                    <div className="text-sm font-bold">
+                        {selectedIds.size} terpilih
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            onClick={clearSelection}
+                            variant="outline"
+                            className="h-9 px-3 text-xs font-bold border-[#f1eee9] dark:border-[#3a342a]"
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            onClick={bulkDelete}
+                            variant="outline"
+                            className="h-9 px-3 text-xs font-bold border-red-500/30 text-red-600 hover:bg-red-500/10"
+                            disabled={loading}
+                        >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Hapus
+                        </Button>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card className="border-[#f1eee9] dark:border-[#3a342a] bg-white dark:bg-[#2a241c] rounded-2xl shadow-sm">
@@ -656,7 +686,51 @@ export default function AdminProductsPage() {
                     <Badge className="bg-primary/10 text-primary border-none">{loading ? '...' : `${products.length} items`}</Badge>
                 </CardHeader>
                 <CardContent>
-                    <div className="overflow-x-auto">
+                    <div className="md:hidden space-y-3">
+                        {loading && <div className="py-8 text-center text-sm text-[#8b775b]">Loading...</div>}
+                        {!loading && products.length === 0 && (
+                            <div className="py-8 text-center text-sm text-[#8b775b]">Belum ada produk.</div>
+                        )}
+                        {!loading &&
+                            products.map((p) => (
+                                <div
+                                    key={p.id}
+                                    className="rounded-2xl border border-[#f1eee9] dark:border-[#3a342a] p-4 bg-white dark:bg-[#2a241c]"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="font-black truncate">{p.name}</p>
+                                            <p className="text-xs text-[#8b775b] truncate">/{p.slug}</p>
+                                            <p className="text-xs text-[#8b775b] mt-1">{getCategoryName(p.category)}</p>
+                                        </div>
+                                        <Button
+                                            onClick={() => openEdit(p)}
+                                            variant="outline"
+                                            className="border-primary/20 text-primary hover:bg-primary/10"
+                                        >
+                                            Edit
+                                        </Button>
+                                    </div>
+
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        <Badge className={cn('border-none', p.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700')}>
+                                            {p.is_active ? 'Active' : 'Inactive'}
+                                        </Badge>
+                                        <Badge className={cn('border-none', p.is_pre_order ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700')}>
+                                            {p.is_pre_order ? 'Pre-order' : 'Ready'}
+                                        </Badge>
+                                        <Badge className={cn('border-none', p.shipping_local_only ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700')}>
+                                            {p.shipping_local_only ? 'Local' : 'All city'}
+                                        </Badge>
+                                        <Badge className="border-none bg-primary/10 text-primary">
+                                            {formatIDR(p.base_price)}
+                                        </Badge>
+                                    </div>
+                                </div>
+                            ))}
+                    </div>
+
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="border-b border-[#f1eee9] dark:border-[#3a342a] text-[#8b775b] text-xs font-bold uppercase tracking-wider">
@@ -734,6 +808,36 @@ export default function AdminProductsPage() {
                                     ))}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-[#f1eee9] dark:border-[#3a342a]">
+                        <div className="text-sm text-[#8b775b]">
+                            Showing {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page <= 1 || loading}
+                                className="h-8 px-3 text-xs font-bold border-[#f1eee9] dark:border-[#3a342a]"
+                            >
+                                Prev
+                            </Button>
+                            <span className="text-sm font-bold px-2">
+                                {page}
+                            </span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage(p => p + 1)}
+                                disabled={page * pageSize >= totalCount || loading}
+                                className="h-8 px-3 text-xs font-bold border-[#f1eee9] dark:border-[#3a342a]"
+                            >
+                                Next
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -1023,7 +1127,7 @@ export default function AdminProductsPage() {
             </Dialog>
 
             <Dialog open={openCreate} onOpenChange={setOpenCreate}>
-                <DialogContent className="sm:max-w-[640px]">
+                <DialogContent className="w-[92vw] max-w-[520px] sm:max-w-[640px] max-h-[85vh] flex flex-col overflow-hidden">
                     <DialogHeader>
                         <DialogTitle>Tambah Produk</DialogTitle>
                         <DialogDescription>
@@ -1031,7 +1135,7 @@ export default function AdminProductsPage() {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4">
+                    <div className="space-y-4 overflow-y-auto pr-1">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5 sm:col-span-2">
                                 <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Nama Produk</label>

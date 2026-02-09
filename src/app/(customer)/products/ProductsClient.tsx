@@ -248,6 +248,33 @@ export default function ProductsClient() {
                 </div>
             </div>
 
+            <div className="lg:hidden sticky top-16 z-20 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-[#fbfaf9] dark:bg-[#1e1a14] pb-4">
+                <div className="flex items-center justify-between gap-2 pt-2">
+                    <Select value={sort} onValueChange={setSort}>
+                        <SelectTrigger className="h-10 flex-1 bg-white dark:bg-surface-dark border-slate-200 dark:border-slate-800 rounded-full">
+                            <SelectValue placeholder="Sort" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="newest">Newest</SelectItem>
+                            <SelectItem value="price_low">Price Low</SelectItem>
+                            <SelectItem value="price_high">Price High</SelectItem>
+                            <SelectItem value="best">Best</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Button variant="outline" className="h-10 rounded-full" onClick={() => setFiltersOpen(true)}>
+                        <SlidersHorizontal className="w-4 h-4" />
+                        Filter{activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ''}
+                    </Button>
+
+                    {activeFiltersCount > 0 && (
+                        <Button variant="outline" className="h-10 rounded-full" onClick={clearAllFilters}>
+                            <X className="w-4 h-4" />
+                        </Button>
+                    )}
+                </div>
+            </div>
+
             <div className="space-y-6">
                 <div className="flex items-center justify-between gap-3">
                     <div className="hidden lg:flex flex-1 items-center gap-2 overflow-x-auto">
@@ -358,7 +385,7 @@ export default function ProductsClient() {
                 </Dialog>
 
                 <div>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-3 lg:gap-4">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-4 lg:gap-5">
                         {pagedProducts.map((p) => (
                             <ProductCard
                                 key={p.id}

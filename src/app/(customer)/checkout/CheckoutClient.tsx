@@ -157,6 +157,7 @@ export default function CheckoutClient() {
     })
     const paymentMethod: PaymentMethod = 'whatsapp'
     const [submitting, setSubmitting] = useState(false)
+    const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false)
     const [settings, setSettings] = useState<PublicSettings>({
         whatsapp_number: '628996853721',
         tax_rate: 0.11,
@@ -312,6 +313,122 @@ export default function CheckoutClient() {
         }
     }, [isNowMode, nowProductId, nowQty, nowVariantId])
 
+    useEffect(() => {
+        setMobileSummaryOpen(false)
+    }, [step])
+
+    const goToPayment = () => {
+        if (!shipping.fullName || !shipping.phone || !shipping.address || !shipping.province || !shipping.city) {
+            alert('Lengkapi data pengiriman dulu ya.')
+            return
+        }
+        setStep('payment')
+    }
+
+    const createOrderAndOpenWhatsApp = async () => {
+        if (!checkoutItems.length) return
+
+        const waWindow = window.open('', '_blank')
+        try {
+            waWindow?.document.write(
+                '<p style="font-family:system-ui,-apple-system,Segoe UI,Roboto; padding:16px">Mengarahkan ke WhatsApp...</p>'
+            )
+        } catch {
+            // ignore
+        }
+
+        setSubmitting(true)
+        try {
+            const response = await fetch('/api/orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    shipping: {
+                        fullName: shipping.fullName,
+                        phone: shipping.phone,
+                        email: shipping.email || undefined,
+                        address: shipping.address,
+                        province: shipping.province || undefined,
+                        city: shipping.city,
+                        postalCode: shipping.postalCode || undefined,
+                        notes: shipping.notes || undefined,
+                    },
+                    paymentMethod,
+                    items: checkoutItems.map((i) => ({
+                        productId: i.productId,
+                        variantId: i.variantId,
+                        productName: i.name,
+                        variantName: i.variantName,
+                        price: i.price,
+                        quantity: i.quantity,
+                    })),
+                }),
+            })
+
+            const result = await response.json()
+
+            if (!response.ok || !result?.success) {
+                throw new Error(result?.error ?? 'Gagal membuat pesanan')
+            }
+
+            setCreatedOrderNumber(result.order.order_number)
+
+            const itemsText = checkoutItems
+                .map((i) => {
+                    const label = i.variantName ? `${i.name} - ${i.variantName}` : i.name
+                    const lineTotal = Number(i.price) * Number(i.quantity)
+                    return `- ${label} x${i.quantity} = Rp${lineTotal.toLocaleString('id-ID')}`
+                })
+                .join('%0A')
+
+            const summary = {
+                customerName: shipping.fullName,
+                customerPhone: shipping.phone,
+                address: shipping.address,
+                city: shipping.city,
+                totalAmount: Number(result.order.total_amount ?? computedTotal),
+                itemsText,
+            }
+
+            setCreatedOrderSummary(summary)
+
+            const waLink = generateOrderWhatsAppLink({
+                phoneNumber: settings.whatsapp_number,
+                orderNumber: result.order.order_number,
+                customerName: summary.customerName,
+                customerPhone: summary.customerPhone,
+                address: summary.address,
+                city: summary.city,
+                totalAmount: summary.totalAmount,
+                itemsText: summary.itemsText,
+                storeName: settings.store_name,
+                deliveryNotes: settings.delivery_notes,
+                pickupNotes: settings.pickup_notes,
+            })
+            setCreatedWhatsAppLink(waLink)
+
+            if (waWindow && !waWindow.closed) {
+                try {
+                    waWindow.location.replace(waLink)
+                } catch {
+                    // ignore
+                }
+            }
+
+            if (!isNowMode) clearCart()
+
+            setStep('confirmation')
+        } catch (e) {
+            if (waWindow && !waWindow.closed) {
+                waWindow.close()
+            }
+            const message = e instanceof Error ? e.message : 'Gagal membuat pesanan'
+            alert(message)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
     if (step !== 'confirmation' && (checkoutItems.length === 0 || (isNowMode && (nowLoading || !!nowError)))) {
         if (isNowMode && nowLoading) {
             return (
@@ -345,7 +462,7 @@ export default function CheckoutClient() {
     }
 
     return (
-        <div className="max-w-7xl mx-auto px-6 py-12">
+        <div className="max-w-7xl mx-auto px-6 py-12 pb-28 lg:pb-12">
             <div className="max-w-3xl mx-auto mb-16 px-4">
                 <div className="flex items-center justify-between relative">
                     <div className="absolute top-1/2 left-0 w-full h-0.5 bg-[#f1eee9] dark:bg-[#3a342a] -translate-y-1/2 -z-10"></div>
@@ -435,7 +552,7 @@ export default function CheckoutClient() {
                                 </div>
                             )}
 
-                            <ShippingForm value={shipping} onChange={setShipping} onNext={() => setStep('payment')} />
+                            <ShippingForm value={shipping} onChange={setShipping} onNext={goToPayment} />
                         </div>
                     )}
                     {step === 'payment' && (
@@ -461,109 +578,7 @@ export default function CheckoutClient() {
                             <PaymentForm
                                 submitting={submitting}
                                 onBack={() => setStep('shipping')}
-                                onNext={async () => {
-                                    if (!checkoutItems.length) return
-
-                                    const waWindow = window.open('', '_blank')
-                                    try {
-                                        waWindow?.document.write(
-                                            '<p style="font-family:system-ui,-apple-system,Segoe UI,Roboto; padding:16px">Mengarahkan ke WhatsApp...</p>'
-                                        )
-                                    } catch {
-                                        // ignore
-                                    }
-
-                                    setSubmitting(true)
-                                    try {
-                                        const response = await fetch('/api/orders', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({
-                                                shipping: {
-                                                    fullName: shipping.fullName,
-                                                    phone: shipping.phone,
-                                                    email: shipping.email || undefined,
-                                                    address: shipping.address,
-                                                    province: shipping.province || undefined,
-                                                    city: shipping.city,
-                                                    postalCode: shipping.postalCode || undefined,
-                                                    notes: shipping.notes || undefined,
-                                                },
-                                                paymentMethod,
-                                                items: checkoutItems.map((i) => ({
-                                                    productId: i.productId,
-                                                    variantId: i.variantId,
-                                                    productName: i.name,
-                                                    variantName: i.variantName,
-                                                    price: i.price,
-                                                    quantity: i.quantity,
-                                                })),
-                                            }),
-                                        })
-
-                                        const result = await response.json()
-
-                                        if (!response.ok || !result?.success) {
-                                            throw new Error(result?.error ?? 'Gagal membuat pesanan')
-                                        }
-
-                                        setCreatedOrderNumber(result.order.order_number)
-
-                                        const itemsText = checkoutItems
-                                            .map((i) => {
-                                                const label = i.variantName ? `${i.name} - ${i.variantName}` : i.name
-                                                const lineTotal = Number(i.price) * Number(i.quantity)
-                                                return `- ${label} x${i.quantity} = Rp${lineTotal.toLocaleString('id-ID')}`
-                                            })
-                                            .join('%0A')
-
-                                        const summary = {
-                                            customerName: shipping.fullName,
-                                            customerPhone: shipping.phone,
-                                            address: shipping.address,
-                                            city: shipping.city,
-                                            totalAmount: Number(result.order.total_amount ?? computedTotal),
-                                            itemsText,
-                                        }
-
-                                        setCreatedOrderSummary(summary)
-
-                                        const waLink = generateOrderWhatsAppLink({
-                                            phoneNumber: settings.whatsapp_number,
-                                            orderNumber: result.order.order_number,
-                                            customerName: summary.customerName,
-                                            customerPhone: summary.customerPhone,
-                                            address: summary.address,
-                                            city: summary.city,
-                                            totalAmount: summary.totalAmount,
-                                            itemsText: summary.itemsText,
-                                            storeName: settings.store_name,
-                                            deliveryNotes: settings.delivery_notes,
-                                            pickupNotes: settings.pickup_notes,
-                                        })
-                                        setCreatedWhatsAppLink(waLink)
-
-                                        if (waWindow && !waWindow.closed) {
-                                            try {
-                                                waWindow.location.replace(waLink)
-                                            } catch {
-                                                // ignore
-                                            }
-                                        }
-
-                                        if (!isNowMode) clearCart()
-
-                                        setStep('confirmation')
-                                    } catch (e) {
-                                        if (waWindow && !waWindow.closed) {
-                                            waWindow.close()
-                                        }
-                                        const message = e instanceof Error ? e.message : 'Gagal membuat pesanan'
-                                        alert(message)
-                                    } finally {
-                                        setSubmitting(false)
-                                    }
-                                }}
+                                onNext={createOrderAndOpenWhatsApp}
                             />
                         </div>
                     )}
@@ -579,7 +594,7 @@ export default function CheckoutClient() {
                 </div>
 
                 {step !== 'confirmation' && (
-                    <div className="lg:col-span-5">
+                    <div className="hidden lg:block lg:col-span-5">
                         <div className="sticky top-24 bg-white dark:bg-[#2a241c] rounded-2xl p-8 border border-[#f1eee9] dark:border-[#3a342a] shadow-sm">
                             <h3 className="text-xl font-bold mb-6">Ringkasan Pesanan</h3>
                             <div className="space-y-4 mb-8 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
@@ -633,6 +648,86 @@ export default function CheckoutClient() {
                     </div>
                 )}
             </div>
+
+            {step !== 'confirmation' && (
+                <div className="lg:hidden fixed left-0 right-0 bottom-[72px] z-40">
+                    <div className="mx-auto max-w-7xl px-6">
+                        <div className="rounded-2xl border border-[#f1eee9] dark:border-[#3a342a] bg-white/95 dark:bg-[#2a241c]/95 backdrop-blur shadow-lg overflow-hidden">
+                            <div className="w-full px-4 py-3 flex items-center justify-between gap-4">
+                                <div className="text-left min-w-0">
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#8b775b]">Total</div>
+                                    <div className="font-black text-primary truncate">Rp {computedTotal.toLocaleString('id-ID')}</div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setMobileSummaryOpen((p) => !p)}
+                                        className="h-10 rounded-full font-bold"
+                                    >
+                                        {mobileSummaryOpen ? 'Tutup' : 'Ringkasan'}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        onClick={step === 'shipping' ? goToPayment : createOrderAndOpenWhatsApp}
+                                        disabled={submitting}
+                                        className="h-10 rounded-full font-black bg-primary text-white"
+                                    >
+                                        {step === 'shipping' ? 'Lanjut' : submitting ? 'Memproses...' : 'Buat Pesanan'}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div
+                                className={cn(
+                                    'grid transition-[grid-template-rows] duration-200 ease-out',
+                                    mobileSummaryOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                                )}
+                            >
+                                <div className="min-h-0 overflow-hidden">
+                                    <div className="px-4 pb-4 max-h-[60vh] overflow-y-auto">
+                                        <div className="space-y-3">
+                                            {checkoutItems.map((item) => (
+                                                <div key={item.id} className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <div className="text-sm font-bold truncate">
+                                                            {item.name}
+                                                            {item.variantName ? ` - ${item.variantName}` : ''}
+                                                        </div>
+                                                        <div className="text-xs text-[#8b775b]">Qty: {item.quantity}</div>
+                                                    </div>
+                                                    <div className="text-sm font-black">
+                                                        Rp {Number(item.price * item.quantity).toLocaleString('id-ID')}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="mt-4 pt-4 border-t border-dashed border-[#f1eee9] dark:border-[#3a342a] space-y-2 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-[#8b775b]">Subtotal</span>
+                                                <span className="font-semibold">Rp {computedSubtotal.toLocaleString('id-ID')}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-[#8b775b]">{shippingCalc.label}</span>
+                                                <span className="font-semibold">
+                                                    {shippingCalc.fee === null
+                                                        ? 'Dibicarakan via WhatsApp'
+                                                        : `Rp ${Number(shippingCalc.fee).toLocaleString('id-ID')}`}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-[#8b775b]">{taxLabel}</span>
+                                                <span className="font-semibold">Rp {computedTax.toLocaleString('id-ID')}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
@@ -659,6 +754,7 @@ function ShippingForm({
                     <Input
                         value={value.fullName}
                         onChange={(e) => onChange({ ...value, fullName: e.target.value })}
+                        autoComplete="name"
                         className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]"
                         placeholder="Contoh: Budi Santoso"
                     />
@@ -668,6 +764,8 @@ function ShippingForm({
                     <Input
                         value={value.phone}
                         onChange={(e) => onChange({ ...value, phone: e.target.value })}
+                        inputMode="tel"
+                        autoComplete="tel"
                         className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]"
                         placeholder="0812xxxx"
                     />
@@ -677,6 +775,8 @@ function ShippingForm({
                     <Input
                         value={value.email}
                         onChange={(e) => onChange({ ...value, email: e.target.value })}
+                        inputMode="email"
+                        autoComplete="email"
                         className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]"
                         placeholder="budi@email.com"
                     />
@@ -712,6 +812,7 @@ function ShippingForm({
                     <Input
                         value={value.city}
                         onChange={(e) => onChange({ ...value, city: e.target.value })}
+                        autoComplete="address-level2"
                         className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]"
                         placeholder="Jakarta Barat"
                     />
@@ -721,6 +822,8 @@ function ShippingForm({
                     <Input
                         value={value.postalCode}
                         onChange={(e) => onChange({ ...value, postalCode: e.target.value })}
+                        inputMode="numeric"
+                        autoComplete="postal-code"
                         className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]"
                         placeholder="11xxx"
                     />
