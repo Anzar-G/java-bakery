@@ -834,6 +834,12 @@ function ConfirmationView({
     whatsAppLink: string
     whatsappNumber: string
 }) {
+    const normalizedOrderNumber = String(orderNumber ?? '').trim()
+    const hasOrderNumber = Boolean(normalizedOrderNumber)
+    const totalAmountText = orderSummary?.totalAmount
+        ? `Rp ${Number(orderSummary.totalAmount).toLocaleString('id-ID')}`
+        : ''
+
     return (
         <div className="text-center py-20 space-y-8 animate-in zoom-in duration-500">
             <div className="size-24 bg-green-500 text-white rounded-full flex items-center justify-center mx-auto shadow-xl shadow-green-500/20">
@@ -843,32 +849,62 @@ function ConfirmationView({
                 <h2 className="text-4xl font-black mb-2 text-[#191510] dark:text-[#fbfaf9]">Pesanan Diterima!</h2>
                 <p className="text-lg text-[#8b775b]">
                     Nomor Pesanan:{' '}
-                    <span className="text-primary font-bold">{orderNumber ? `#${orderNumber}` : '-'}</span>
+                    <span className="text-primary font-bold">{hasOrderNumber ? `#${normalizedOrderNumber}` : 'Sedang menyiapkan...'}</span>
                 </p>
             </div>
 
             <div className="max-w-md mx-auto bg-white dark:bg-[#2a241c] p-8 rounded-2xl border border-[#f1eee9] dark:border-[#3a342a] shadow-sm">
-                <p className="text-[#8b775b] mb-6">
-                    Silakan cek email atau WhatsApp Anda untuk detail pembayaran dan status pengiriman.
-                </p>
+                {orderSummary ? (
+                    <div className="text-left mb-6 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Ringkasan</p>
+                            {totalAmountText && <p className="text-sm font-black text-primary">{totalAmountText}</p>}
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 text-sm">
+                            <div>
+                                <p className="text-xs text-[#8b775b]">Nama</p>
+                                <p className="font-bold">{orderSummary.customerName || '-'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-[#8b775b]">No. WhatsApp</p>
+                                <p className="font-bold">{orderSummary.customerPhone || '-'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-[#8b775b]">Alamat</p>
+                                <p className="font-bold">{orderSummary.address || '-'}{orderSummary.city ? `, ${orderSummary.city}` : ''}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-[#8b775b]">Items</p>
+                                <pre className="whitespace-pre-wrap font-sans text-sm font-bold">{decodeURIComponent(orderSummary.itemsText || '-')}</pre>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <p className="text-[#8b775b] mb-6">Silakan lanjutkan konfirmasi via WhatsApp untuk diproses admin.</p>
+                )}
                 <div className="flex flex-col gap-3">
                     <Button asChild className="w-full bg-primary py-7 rounded-xl font-bold">
                         <Link href="/">Kembali ke Beranda</Link>
                     </Button>
-                    <Button asChild variant="outline" className="w-full py-7 rounded-xl font-bold border-primary text-primary">
-                        <Link href={orderNumber ? `/orders/${encodeURIComponent(orderNumber)}` : '/products'}>
+                    <Button
+                        asChild
+                        variant="outline"
+                        className="w-full py-7 rounded-xl font-bold border-primary text-primary"
+                        disabled={!hasOrderNumber}
+                    >
+                        <Link href={hasOrderNumber ? `/orders/${encodeURIComponent(normalizedOrderNumber)}` : '/products'}>
                             Lihat Status Pesanan
                         </Link>
                     </Button>
 
-                    {paymentMethod === 'whatsapp' && orderNumber && (
-                        <Button asChild className="w-full py-7 rounded-xl font-bold bg-green-600 hover:bg-green-700 text-white">
+                    {paymentMethod === 'whatsapp' && hasOrderNumber && (
+                        <Button asChild className="w-full py-7 rounded-xl font-bold bg-green-600 hover:bg-green-700 text-white" disabled={!hasOrderNumber}>
                             <a
                                 href={
                                     whatsAppLink ||
                                     generateOrderWhatsAppLink({
                                         phoneNumber: whatsappNumber,
-                                        orderNumber,
+                                        orderNumber: normalizedOrderNumber,
                                         customerName: orderSummary?.customerName ?? '',
                                         customerPhone: orderSummary?.customerPhone ?? '',
                                         address: orderSummary?.address ?? '',
