@@ -13,6 +13,8 @@ import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
+const NAME_PREFIX = '__name__:'
+
 type ProductImage = {
     image_url: string
     alt_text: string | null
@@ -45,6 +47,14 @@ type ProductDetail = {
     variants: ProductVariant[]
 }
 
+type ApprovedReview = {
+    id: string
+    rating: number
+    title: string | null
+    comment: string | null
+    created_at: string
+}
+
 function generateWhatsAppLink(params: {
     phoneNumber: string
     productName: string
@@ -68,6 +78,7 @@ export default function ProductDetailPage() {
     const [quantity, setQuantity] = useState(1)
     const [loading, setLoading] = useState(true)
     const [product, setProduct] = useState<ProductDetail | null>(null)
+    const [approvedReviews, setApprovedReviews] = useState<ApprovedReview[]>([])
     const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null)
     const addItem = useCartStore((state) => state.addItem)
 
@@ -129,8 +140,24 @@ export default function ProductDetailPage() {
             normalized.variants.sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
 
             setProduct(normalized)
-            setSelectedVariantId(normalized.variants?.[0]?.id ?? null)
+            const firstActive = normalized.variants.find((v) => v.is_active !== false)
+            setSelectedVariantId(firstActive?.id ?? null)
             setLoading(false)
+
+            const { data: reviewsData, error: reviewsError } = await supabase
+                .from('reviews')
+                .select('id, rating, title, comment, created_at')
+                .eq('is_approved', true)
+                .eq('product_id', data.id)
+                .order('created_at', { ascending: false })
+                .limit(20)
+
+            if (!cancelled) {
+                if (reviewsError) {
+                    console.error('[ProductDetailPage] fetchReviews error', { productId: data.id, error: reviewsError })
+                }
+                setApprovedReviews(Array.isArray(reviewsData) ? (reviewsData as any) : [])
+            }
 
             await supabase
                 .from('products')
@@ -145,10 +172,21 @@ export default function ProductDetailPage() {
         }
     }, [slug])
 
+    const computedRating = useMemo(() => {
+        if (!approvedReviews.length) return null
+        const total = approvedReviews.reduce((acc, r) => acc + Number(r.rating ?? 0), 0)
+        return total / approvedReviews.length
+    }, [approvedReviews])
+
     const selectedVariant = useMemo(() => {
         if (!product?.variants?.length) return null
         return product.variants.find((v) => v.id === selectedVariantId) ?? product.variants[0]
     }, [product, selectedVariantId])
+
+    const selectableVariants = useMemo(() => {
+        if (!product?.variants?.length) return []
+        return product.variants.filter((v) => v.is_active !== false)
+    }, [product])
 
     const galleryImages = useMemo(() => {
         if (!product) return []
@@ -185,7 +223,15 @@ export default function ProductDetailPage() {
             quantity,
             image: galleryImages[0]?.url,
         })
-        toast.success(`Ditambahkan ke keranjang!`)
+        toast.success('Ditambahkan ke keranjang', {
+            description: `${quantity} x ${product.name}`,
+            action: {
+                label: 'Lihat Keranjang',
+                onClick: () => {
+                    window.location.href = '/cart'
+                },
+            },
+        })
     }
 
     const handleBuyNow = () => {
@@ -200,9 +246,9 @@ export default function ProductDetailPage() {
     }
 
     return (
-        <div className="max-w-7xl mx-auto px-6 py-8 lg:py-12">
+        <div className="max-w-4xl mx-auto p-4 md:p-6">
             {/* Breadcrumb */}
-            <nav className="flex items-center gap-2 text-sm text-slate-500 mb-8 overflow-x-auto whitespace-nowrap">
+            <nav className="flex items-center gap-2 text-sm text-slate-500 mb-6 overflow-x-auto whitespace-nowrap">
                 <Link href="/" className="hover:text-primary">Home</Link>
                 <Plus className="w-3 h-3 rotate-45" />
                 <Link
@@ -231,105 +277,125 @@ export default function ProductDetailPage() {
 
             {product && (
             <>
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-                {/* Gallery */}
-                <div className="lg:col-span-7">
+            <div className="mb-6">
+                <div className="rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800">
                     <ProductGallery images={galleryImages} />
                 </div>
+            </div>
 
-                {/* Info */}
-                <div className="lg:col-span-5 flex flex-col gap-8 sticky top-28 h-fit">
-                    <div>
-                        <div className="flex items-center gap-3 mb-4">
-                            <Badge className="bg-primary/20 text-primary text-xs font-bold rounded-full tracking-wide border-none px-3 py-1">
-                                {product.is_pre_order ? 'PRE-ORDER REQUIRED' : 'READY'}
-                            </Badge>
-                            <div className="flex items-center gap-1 text-yellow-500">
-                                <Star className="w-4 h-4 fill-current" />
-                                <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                                    {(product.rating_average ?? 0).toFixed(1)} ({product.review_count ?? 0} Reviews)
-                                </span>
-                            </div>
-                        </div>
-                        <h2 className="text-4xl font-extrabold text-slate-900 dark:text-slate-100 leading-tight mb-2">{product.name}</h2>
-                        <p className="text-slate-500 dark:text-slate-400">{product.description}</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 lg:gap-8 mb-10">
+                <div>
+                    <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-slate-900 dark:text-slate-100 mb-3 leading-snug">
+                        {product.name}
+                    </h1>
+
+                    <div className="flex flex-wrap items-center gap-2 mb-4 text-sm text-slate-500">
+                        <span className="inline-flex items-center gap-1 text-yellow-500 font-bold">
+                            <Star className="w-4 h-4 fill-current" />
+                            {((computedRating ?? product.rating_average ?? 0) as number).toFixed(1)}
+                        </span>
+                        <span className="font-medium">({approvedReviews.length || product.review_count || 0})</span>
+                        <span className="text-slate-400">|</span>
+                        <Badge className="bg-primary/10 text-primary text-xs font-bold rounded-full tracking-wide border-none px-3 py-1">
+                            {product.is_pre_order ? `Pre-order ${product.pre_order_days ?? 2} hari` : 'Ready'}
+                        </Badge>
                     </div>
 
-                    <div className="border-y border-slate-100 dark:border-slate-800 py-6">
-                        <span className="text-3xl font-bold text-primary">Rp {unitPrice.toLocaleString('id-ID')}</span>
-                    </div>
-
-                    {/* Variations */}
-                    <div className="space-y-4">
-                        <p className="text-sm font-bold uppercase tracking-wider text-slate-500">Select Size</p>
-                        <div className="flex flex-wrap gap-3">
-                            {product.variants?.length ? (
-                                product.variants.map((v) => (
-                                    <Button
-                                        key={v.id}
-                                        variant={selectedVariantId === v.id ? 'default' : 'outline'}
-                                        onClick={() => setSelectedVariantId(v.id)}
-                                        className={cn(
-                                            "px-5 py-6 rounded-xl border-2 font-bold transition-all",
-                                            selectedVariantId === v.id ? "border-primary bg-primary/5 text-primary" : "border-slate-200 dark:border-slate-700 hover:border-primary"
-                                        )}
-                                    >
-                                        {v.name}
-                                    </Button>
-                                ))
-                            ) : (
-                                <div className="text-sm text-slate-500">Tidak ada varian.</div>
-                            )}
+                    <div className="mb-6 space-y-1">
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl lg:text-4xl font-black text-red-600">Rp {unitPrice.toLocaleString('id-ID')}</span>
                         </div>
-                    </div>
-
-                    {/* Quantity & Actions */}
-                    <div className="space-y-4 pt-4">
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center border-2 border-slate-200 dark:border-slate-700 rounded-xl p-1">
-                                <Button variant="ghost" size="icon" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-10 h-10">
-                                    <Minus className="w-4 h-4" />
-                                </Button>
-                                <span className="w-12 text-center font-bold">{quantity}</span>
-                                <Button variant="ghost" size="icon" onClick={() => setQuantity(quantity + 1)} className="w-10 h-10">
-                                    <Plus className="w-4 h-4" />
-                                </Button>
-                            </div>
-                            <p className="text-xs text-slate-500 font-medium">Stock: 5 slots left for Friday</p>
-                        </div>
-                        <div className="flex flex-col gap-3">
-                            <Button onClick={handleAddToCart} className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-7 rounded-xl shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2">
-                                <ShoppingBasket className="w-5 h-5" />
-                                Tambah ke Keranjang
-                            </Button>
-                            <Button onClick={handleBuyNow} variant="outline" className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white border-none font-bold py-7 rounded-xl flex items-center justify-center gap-2 transition-all">
-                                <WhatsAppIcon /> Beli Sekarang
-                            </Button>
-                        </div>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{product.description}</p>
                     </div>
 
                     {/* Highlights */}
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center gap-3">
+                        <div className="px-5 py-4 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center gap-3">
                             <ShieldCheck className="text-primary w-5 h-5" />
-                            <div>
+                            <div className="space-y-0.5">
                                 <p className="text-[10px] uppercase font-bold text-slate-400">Quality</p>
                                 <p className="text-xs font-bold">Premium Dutch Butter</p>
                             </div>
                         </div>
-                        <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center gap-3">
+                        <div className="px-5 py-4 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center gap-3">
                             <Clock className="text-primary w-5 h-5" />
-                            <div>
+                            <div className="space-y-0.5">
                                 <p className="text-[10px] uppercase font-bold text-slate-400">Pre-Order</p>
                                 <p className="text-xs font-bold">{product.pre_order_days ?? 2} Hari</p>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <div className="mt-6 lg:mt-0 lg:sticky lg:top-6 lg:self-start">
+                    <div className="bg-white dark:bg-surface-dark p-4 md:p-6 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800">
+                        {/* Variations */}
+                        {selectableVariants.length > 1 && (
+                            <div className="space-y-4">
+                                <p className="text-sm font-bold uppercase tracking-wider text-slate-500">Select Product</p>
+                                <div className="flex flex-wrap gap-3">
+                                    {selectableVariants.map((v) => (
+                                        <Button
+                                            key={v.id}
+                                            variant={selectedVariantId === v.id ? 'default' : 'outline'}
+                                            onClick={() => setSelectedVariantId(v.id)}
+                                            className={cn(
+                                                "px-5 py-6 rounded-xl border-2 font-bold transition-all",
+                                                selectedVariantId === v.id
+                                                    ? "border-primary bg-primary/5 text-primary"
+                                                    : "border-slate-200 dark:border-slate-700 hover:border-primary"
+                                            )}
+                                        >
+                                            {v.name}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Quantity & Actions */}
+                        <div className="space-y-4 pt-6">
+                            <div className="flex items-center gap-3">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                                    className="flex-1 h-12 rounded-xl font-bold"
+                                >
+                                    -
+                                </Button>
+                                <span className="text-xl font-bold w-12 text-center">{quantity}</span>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setQuantity(quantity + 1)}
+                                    className="flex-1 h-12 rounded-xl font-bold"
+                                >
+                                    +
+                                </Button>
+                            </div>
+
+                            <Button
+                                onClick={handleAddToCart}
+                                className="w-full h-14 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-base font-black shadow-lg"
+                            >
+                                <ShoppingBasket className="w-5 h-5" />
+                                Masukkan Keranjang
+                            </Button>
+
+                            <Button
+                                onClick={handleBuyNow}
+                                className="w-full h-12 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold"
+                            >
+                                <WhatsAppIcon /> Beli Sekarang
+                            </Button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Lower Section */}
-            <div className="mt-20">
+            <div className="mt-12">
                 <Tabs defaultValue="description" className="w-full">
                     <TabsList className="bg-transparent border-b border-slate-200 dark:border-slate-800 w-full justify-start rounded-none h-auto p-0 gap-12 mb-8">
                         <TabsTrigger value="description" className="pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary font-bold">Description</TabsTrigger>
@@ -359,7 +425,51 @@ export default function ProductDetailPage() {
                                 </div>
                             </TabsContent>
                             <TabsContent value="reviews">
-                                <p className="text-slate-600 dark:text-slate-400">Ulasan pelanggan...</p>
+                                {approvedReviews.length === 0 ? (
+                                    <p className="text-slate-600 dark:text-slate-400">Belum ada review untuk produk ini.</p>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {approvedReviews.map((r) => {
+                                            const rawComment = String(r.comment ?? '')
+                                            let reviewerName = ''
+                                            let cleanedComment = rawComment
+                                            if (rawComment.startsWith(NAME_PREFIX)) {
+                                                const newlineIdx = rawComment.indexOf('\n')
+                                                if (newlineIdx > -1) {
+                                                    reviewerName = rawComment.slice(NAME_PREFIX.length, newlineIdx).trim()
+                                                    cleanedComment = rawComment.slice(newlineIdx + 1)
+                                                } else {
+                                                    reviewerName = rawComment.slice(NAME_PREFIX.length).trim()
+                                                    cleanedComment = ''
+                                                }
+                                            }
+
+                                            return (
+                                                <div key={r.id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-dark p-4">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <div className="font-bold text-slate-900 dark:text-slate-100">
+                                                                {r.title || 'Review'}
+                                                            </div>
+                                                            {reviewerName && (
+                                                                <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">
+                                                                    {reviewerName}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-xs font-bold text-yellow-500">{r.rating}/5</div>
+                                                    </div>
+                                                    <div className="mt-3 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                                                        {cleanedComment || '-'}
+                                                    </div>
+                                                    <div className="mt-3 text-xs text-slate-400">
+                                                        {r.created_at ? new Date(r.created_at).toLocaleDateString('id-ID') : ''}
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
                             </TabsContent>
                         </div>
                         <div className="lg:col-span-4 bg-primary/5 p-8 rounded-2xl border border-primary/10 h-fit">

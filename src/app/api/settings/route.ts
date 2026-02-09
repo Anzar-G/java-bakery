@@ -20,7 +20,20 @@ export async function GET() {
             auth: { persistSession: false },
         })
 
-        const keys = ['whatsapp_number', 'tax_rate', 'store_name', 'store_email', 'delivery_notes', 'pickup_notes']
+        const keys = [
+            'whatsapp_number',
+            'tax_rate',
+            'store_name',
+            'store_email',
+            'delivery_notes',
+            'pickup_notes',
+            'shipping_fee_jawa_tengah',
+            'shipping_fee_di_yogyakarta',
+            'shipping_fee_jawa_barat',
+            'shipping_fee_dki_jakarta',
+            'shipping_fee_banten',
+            'shipping_fee_jawa_timur',
+        ]
 
         const { data, error } = await supabase.from('settings').select('key, value').in('key', keys)
 
@@ -37,6 +50,11 @@ export async function GET() {
 
         const taxRate = Number(map.tax_rate)
 
+        const parseFee = (key: string, fallback: number) => {
+            const n = Number(map[key])
+            return Number.isFinite(n) && n >= 0 ? n : fallback
+        }
+
         return NextResponse.json({
             success: true,
             settings: {
@@ -46,6 +64,14 @@ export async function GET() {
                 store_email: map.store_email,
                 delivery_notes: map.delivery_notes,
                 pickup_notes: map.pickup_notes,
+                shipping_fees: {
+                    jawa_tengah: parseFee('shipping_fee_jawa_tengah', 10_000),
+                    di_yogyakarta: parseFee('shipping_fee_di_yogyakarta', 10_000),
+                    jawa_barat: parseFee('shipping_fee_jawa_barat', 13_000),
+                    dki_jakarta: parseFee('shipping_fee_dki_jakarta', 13_000),
+                    banten: parseFee('shipping_fee_banten', 13_000),
+                    jawa_timur: parseFee('shipping_fee_jawa_timur', 13_000),
+                },
             },
         })
     } catch (e) {

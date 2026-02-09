@@ -19,6 +19,12 @@ type SettingsResponse = {
     store_email: SettingRow
     delivery_notes: SettingRow
     pickup_notes: SettingRow
+    shipping_fee_jawa_tengah: SettingRow
+    shipping_fee_di_yogyakarta: SettingRow
+    shipping_fee_jawa_barat: SettingRow
+    shipping_fee_dki_jakarta: SettingRow
+    shipping_fee_banten: SettingRow
+    shipping_fee_jawa_timur: SettingRow
 }
 
 export default function AdminSettingsPage() {
@@ -33,6 +39,12 @@ export default function AdminSettingsPage() {
         store_email: '',
         delivery_notes: '',
         pickup_notes: '',
+        shipping_fee_jawa_tengah: '10000',
+        shipping_fee_di_yogyakarta: '10000',
+        shipping_fee_jawa_barat: '13000',
+        shipping_fee_dki_jakarta: '13000',
+        shipping_fee_banten: '13000',
+        shipping_fee_jawa_timur: '13000',
     })
 
     const fetchSettings = async () => {
@@ -56,6 +68,12 @@ export default function AdminSettingsPage() {
                 store_email: s.store_email?.value ?? '',
                 delivery_notes: s.delivery_notes?.value ?? '',
                 pickup_notes: s.pickup_notes?.value ?? '',
+                shipping_fee_jawa_tengah: s.shipping_fee_jawa_tengah?.value ?? '10000',
+                shipping_fee_di_yogyakarta: s.shipping_fee_di_yogyakarta?.value ?? '10000',
+                shipping_fee_jawa_barat: s.shipping_fee_jawa_barat?.value ?? '13000',
+                shipping_fee_dki_jakarta: s.shipping_fee_dki_jakarta?.value ?? '13000',
+                shipping_fee_banten: s.shipping_fee_banten?.value ?? '13000',
+                shipping_fee_jawa_timur: s.shipping_fee_jawa_timur?.value ?? '13000',
             })
 
             setLoading(false)
@@ -78,6 +96,22 @@ export default function AdminSettingsPage() {
             return
         }
 
+        const feeKeys: Array<keyof typeof values> = [
+            'shipping_fee_jawa_tengah',
+            'shipping_fee_di_yogyakarta',
+            'shipping_fee_jawa_barat',
+            'shipping_fee_dki_jakarta',
+            'shipping_fee_banten',
+            'shipping_fee_jawa_timur',
+        ]
+        for (const k of feeKeys) {
+            const n = Number(values[k])
+            if (!Number.isFinite(n) || n < 0) {
+                toast.error('Ongkir harus angka >= 0')
+                return
+            }
+        }
+
         setSaving(true)
         try {
             const res = await fetch('/api/admin/settings', {
@@ -91,6 +125,12 @@ export default function AdminSettingsPage() {
                         store_email: values.store_email,
                         delivery_notes: values.delivery_notes,
                         pickup_notes: values.pickup_notes,
+                        shipping_fee_jawa_tengah: values.shipping_fee_jawa_tengah,
+                        shipping_fee_di_yogyakarta: values.shipping_fee_di_yogyakarta,
+                        shipping_fee_jawa_barat: values.shipping_fee_jawa_barat,
+                        shipping_fee_dki_jakarta: values.shipping_fee_dki_jakarta,
+                        shipping_fee_banten: values.shipping_fee_banten,
+                        shipping_fee_jawa_timur: values.shipping_fee_jawa_timur,
                     },
                 }),
             })
@@ -198,6 +238,43 @@ export default function AdminSettingsPage() {
                                 onChange={(e) => setValues((p) => ({ ...p, pickup_notes: e.target.value }))}
                                 placeholder="Pickup by appointment."
                             />
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="border-[#f1eee9] dark:border-[#3a342a] bg-white dark:bg-[#2a241c] rounded-2xl shadow-sm">
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">Ongkir per Provinsi</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Jawa Tengah</label>
+                            <Input value={values.shipping_fee_jawa_tengah} onChange={(e) => setValues((p) => ({ ...p, shipping_fee_jawa_tengah: e.target.value }))} placeholder="10000" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">DI Yogyakarta</label>
+                            <Input value={values.shipping_fee_di_yogyakarta} onChange={(e) => setValues((p) => ({ ...p, shipping_fee_di_yogyakarta: e.target.value }))} placeholder="10000" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Jawa Barat</label>
+                            <Input value={values.shipping_fee_jawa_barat} onChange={(e) => setValues((p) => ({ ...p, shipping_fee_jawa_barat: e.target.value }))} placeholder="13000" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">DKI Jakarta</label>
+                            <Input value={values.shipping_fee_dki_jakarta} onChange={(e) => setValues((p) => ({ ...p, shipping_fee_dki_jakarta: e.target.value }))} placeholder="13000" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Banten</label>
+                            <Input value={values.shipping_fee_banten} onChange={(e) => setValues((p) => ({ ...p, shipping_fee_banten: e.target.value }))} placeholder="13000" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Jawa Timur</label>
+                            <Input value={values.shipping_fee_jawa_timur} onChange={(e) => setValues((p) => ({ ...p, shipping_fee_jawa_timur: e.target.value }))} placeholder="13000" />
+                        </div>
+                        <div className="md:col-span-2 text-xs text-[#8b775b]">
+                            Luar Pulau Jawa: ongkir akan ditampilkan sebagai “Konfirmasi via WhatsApp” dan tidak masuk total.
                         </div>
                     </div>
                 </CardContent>

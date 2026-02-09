@@ -111,11 +111,40 @@ export async function PATCH(request: NextRequest) {
             .from('reviews')
             .update({ is_approved: body.is_approved })
             .eq('id', body.id)
-            .select('id, is_approved')
+            .select('id, is_approved, product_id')
             .single()
 
         if (error) {
             return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+        }
+
+        const productId = (data as any)?.product_id as string | null | undefined
+        if (productId) {
+            const { data: approvedRows, error: approvedError } = await admin.supabase
+                .from('reviews')
+                .select('rating')
+                .eq('product_id', productId)
+                .eq('is_approved', true)
+
+            if (approvedError) {
+                return NextResponse.json({ success: false, error: approvedError.message }, { status: 500 })
+            }
+
+            const ratings = (approvedRows ?? []).map((r: any) => Number(r.rating)).filter((n) => Number.isFinite(n))
+            const count = ratings.length
+            const avg = count === 0 ? 0 : ratings.reduce((a, b) => a + b, 0) / count
+
+            const { error: prodError } = await admin.supabase
+                .from('products')
+                .update({
+                    rating_average: count === 0 ? null : avg,
+                    review_count: count,
+                })
+                .eq('id', productId)
+
+            if (prodError) {
+                return NextResponse.json({ success: false, error: prodError.message }, { status: 500 })
+            }
         }
 
         return NextResponse.json({ success: true, review: data })

@@ -38,7 +38,13 @@ export function ProductCard({ product }: ProductCardProps) {
             quantity: 1,
             image: product.image,
         })
-        toast.success(`${product.name} added to cart!`)
+        toast.success('Ditambahkan ke keranjang', {
+            description: product.name,
+            action: {
+                label: 'Lihat Keranjang',
+                onClick: () => router.push('/cart'),
+            },
+        })
     }
 
     const handleBuyNow = (e: React.MouseEvent) => {
@@ -56,7 +62,7 @@ export function ProductCard({ product }: ProductCardProps) {
     return (
         <Link
             href={product.slug ? `/products/${product.slug}` : '#'}
-            className="group flex flex-col bg-white dark:bg-surface-dark rounded-lg overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md transition-shadow duration-300 h-full"
+            className="group flex flex-col bg-white dark:bg-surface-dark rounded-md overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md transition-shadow duration-300 h-full"
         >
             <div className="relative aspect-square w-full bg-slate-100">
                 <Image
@@ -82,36 +88,38 @@ export function ProductCard({ product }: ProductCardProps) {
 
             <div className="p-2 flex flex-col flex-1">
                 {/* Title: 2 lines max, 14px */}
-                <h3 className="text-[14px] leading-[18px] h-[36px] font-normal text-slate-800 dark:text-slate-100 line-clamp-2 mb-2">
+                <h3 className="text-[13px] leading-[17px] h-[34px] font-normal text-slate-800 dark:text-slate-100 line-clamp-2 mb-2">
                     {product.name}
                 </h3>
 
                 <div className="mt-auto">
                     <div className="flex items-center justify-between mb-2">
                         {/* Price: #EE4D2D, 16px font-bold */}
-                        <span className="text-[16px] font-bold text-[#EE4D2D]">
+                        <span className="text-[15px] font-bold text-[#EE4D2D]">
                             Rp {product.price.toLocaleString('id-ID')}
                         </span>
 
                         {/* Rating */}
-                        <div className="flex items-center text-xs text-slate-500">
-                            <Star className="w-3 h-3 text-amber-400 fill-amber-400 mr-0.5" />
-                            <span>{product.rating}</span>
-                        </div>
+                        {Number.isFinite(product.rating) && product.rating > 0 && (
+                            <div className="flex items-center text-xs text-slate-500">
+                                <Star className="w-3 h-3 text-amber-400 fill-amber-400 mr-0.5" />
+                                <span>{product.rating}</span>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Buy Button: 36px height, #EE4D2D, rounded 4px */}
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* Buy Button: compact, Shopee-like */}
+                    <div className="grid grid-cols-3 gap-2">
                         <Button
                             onClick={handleAddToCart}
                             variant="outline"
-                            className="h-[36px] px-0 rounded-[4px] border-[#EE4D2D] text-[#EE4D2D] hover:bg-[#EE4D2D]/5 hover:text-[#EE4D2D]"
+                            className="hidden sm:flex h-[34px] px-0 rounded-[4px] border-[#EE4D2D] text-[#EE4D2D] hover:bg-[#EE4D2D]/5 hover:text-[#EE4D2D]"
                         >
                             <ShoppingBag className="w-4 h-4" />
                         </Button>
                         <Button
                             onClick={handleBuyNow}
-                            className="h-[36px] px-0 rounded-[4px] bg-[#EE4D2D] hover:bg-[#d03e1f] text-white font-medium"
+                            className="h-[34px] sm:col-span-2 col-span-3 px-0 rounded-[4px] bg-[#EE4D2D] hover:bg-[#d03e1f] text-white font-medium"
                         >
                             Beli
                         </Button>

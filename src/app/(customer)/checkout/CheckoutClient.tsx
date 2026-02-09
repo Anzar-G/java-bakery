@@ -10,6 +10,13 @@ import { useCartStore } from '@/store/useCartStore'
 import { cn } from '@/lib/utils'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
 
 type CheckoutStep = 'shipping' | 'payment' | 'confirmation'
 
@@ -18,9 +25,48 @@ type ShippingData = {
     phone: string
     email: string
     address: string
+    province: string
     city: string
     postalCode: string
     notes: string
+}
+
+const PROVINCE = {
+    JATENG: 'jawa_tengah',
+    JABAR: 'jawa_barat',
+    JATIM: 'jawa_timur',
+    DIY: 'di_yogyakarta',
+    DKI: 'dki_jakarta',
+    BANTEN: 'banten',
+    OTHER: 'other',
+} as const
+
+function computeShippingFee(
+    province: string,
+    fees?: {
+        jawa_tengah?: number
+        di_yogyakarta?: number
+        jawa_barat?: number
+        dki_jakarta?: number
+        banten?: number
+        jawa_timur?: number
+    }
+): { fee: number | null; label: string } {
+    const map = {
+        [PROVINCE.JATENG]: Number(fees?.jawa_tengah ?? 10_000),
+        [PROVINCE.DIY]: Number(fees?.di_yogyakarta ?? 10_000),
+        [PROVINCE.JABAR]: Number(fees?.jawa_barat ?? 13_000),
+        [PROVINCE.DKI]: Number(fees?.dki_jakarta ?? 13_000),
+        [PROVINCE.BANTEN]: Number(fees?.banten ?? 13_000),
+        [PROVINCE.JATIM]: Number(fees?.jawa_timur ?? 13_000),
+    } as const
+
+    if (province === PROVINCE.OTHER) return { fee: null, label: 'Ongkir (konfirmasi via WhatsApp)' }
+    if (!province) return { fee: 0, label: 'Ongkir' }
+
+    const fee = (map as any)[province]
+    if (typeof fee === 'number' && Number.isFinite(fee) && fee >= 0) return { fee, label: 'Ongkir' }
+    return { fee: 0, label: 'Ongkir' }
 }
 
 type PaymentMethod = 'whatsapp'
@@ -32,6 +78,14 @@ type PublicSettings = {
     store_email: string
     delivery_notes: string
     pickup_notes: string
+    shipping_fees?: {
+        jawa_tengah?: number
+        di_yogyakarta?: number
+        jawa_barat?: number
+        dki_jakarta?: number
+        banten?: number
+        jawa_timur?: number
+    }
 }
 
 function generateOrderWhatsAppLink(params: {
@@ -75,6 +129,7 @@ export default function CheckoutClient() {
     const nowProductId = searchParams.get('productId') ?? ''
     const nowVariantId = searchParams.get('variantId') ?? ''
     const nowQty = Number(searchParams.get('qty') ?? '1')
+    const initialProvince = String(searchParams.get('province') ?? '').trim()
 
     const [step, setStep] = useState<CheckoutStep>('shipping')
     const { items, getTotalPrice, clearCart } = useCartStore()
@@ -95,6 +150,7 @@ export default function CheckoutClient() {
         phone: '',
         email: '',
         address: '',
+        province: initialProvince,
         city: '',
         postalCode: '',
         notes: '',
@@ -120,10 +176,6 @@ export default function CheckoutClient() {
     } | null>(null)
     const [createdWhatsAppLink, setCreatedWhatsAppLink] = useState<string>('')
 
-    const subtotal = getTotalPrice()
-    const tax = subtotal * (Number(settings.tax_rate) || 0.11)
-    const total = subtotal + tax
-
     const checkoutItems = useMemo(() => {
         if (isNowMode) return nowItem ? [nowItem] : []
         return items
@@ -133,8 +185,10 @@ export default function CheckoutClient() {
         return checkoutItems.reduce((sum, i) => sum + Number(i.price) * Number(i.quantity), 0)
     }, [checkoutItems])
 
+    const shippingCalc = useMemo(() => computeShippingFee(shipping.province, settings.shipping_fees), [shipping.province, settings.shipping_fees])
+
     const computedTax = computedSubtotal * (Number(settings.tax_rate) || 0.11)
-    const computedTotal = computedSubtotal + computedTax
+    const computedTotal = computedSubtotal + computedTax + (typeof shippingCalc.fee === 'number' ? shippingCalc.fee : 0)
 
     const taxLabel = `Pajak (${Math.round((Number(settings.tax_rate) || 0.11) * 100)}%)`
 
@@ -157,6 +211,7 @@ export default function CheckoutClient() {
                     store_email: String((s as any).store_email ?? prev.store_email),
                     delivery_notes: String(s.delivery_notes ?? prev.delivery_notes),
                     pickup_notes: String(s.pickup_notes ?? prev.pickup_notes),
+                    shipping_fees: typeof (s as any).shipping_fees === 'object' ? ((s as any).shipping_fees as any) : prev.shipping_fees,
                 }))
             } catch {
                 // ignore
@@ -429,6 +484,7 @@ export default function CheckoutClient() {
                                                     phone: shipping.phone,
                                                     email: shipping.email || undefined,
                                                     address: shipping.address,
+                                                    province: shipping.province || undefined,
                                                     city: shipping.city,
                                                     postalCode: shipping.postalCode || undefined,
                                                     notes: shipping.notes || undefined,
@@ -552,6 +608,12 @@ export default function CheckoutClient() {
                                     <span className="font-medium">Rp {computedSubtotal.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between text-base">
+                                    <span className="text-[#8b775b]">{shippingCalc.label}</span>
+                                    <span className="font-medium">
+                                        {shippingCalc.fee === null ? 'Dibicarakan via WhatsApp' : `Rp ${Number(shippingCalc.fee).toLocaleString()}`}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between text-base">
                                     <span className="text-[#8b775b]">{taxLabel}</span>
                                     <span className="font-medium">Rp {computedTax.toLocaleString()}</span>
                                 </div>
@@ -629,6 +691,23 @@ function ShippingForm({
                     ></textarea>
                 </div>
                 <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Provinsi</label>
+                    <Select value={value.province} onValueChange={(next) => onChange({ ...value, province: next })}>
+                        <SelectTrigger className="h-12 rounded-xl bg-[#fbfaf9] dark:bg-[#1e1a14] border-[#f1eee9] dark:border-[#3a342a]">
+                            <SelectValue placeholder="Pilih provinsi" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="jawa_tengah">Jawa Tengah</SelectItem>
+                            <SelectItem value="di_yogyakarta">DI Yogyakarta</SelectItem>
+                            <SelectItem value="jawa_barat">Jawa Barat</SelectItem>
+                            <SelectItem value="dki_jakarta">DKI Jakarta</SelectItem>
+                            <SelectItem value="banten">Banten</SelectItem>
+                            <SelectItem value="jawa_timur">Jawa Timur</SelectItem>
+                            <SelectItem value="other">Luar Pulau Jawa</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-1.5">
                     <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Kota</label>
                     <Input
                         value={value.city}
@@ -659,7 +738,7 @@ function ShippingForm({
 
             <Button
                 onClick={() => {
-                    if (!value.fullName || !value.phone || !value.address || !value.city) {
+                    if (!value.fullName || !value.phone || !value.address || !value.province || !value.city) {
                         alert('Lengkapi data pengiriman dulu ya.')
                         return
                     }

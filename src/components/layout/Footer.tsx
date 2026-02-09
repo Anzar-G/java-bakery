@@ -104,7 +104,7 @@ export function Footer() {
             </div>
 
             <div className="max-w-7xl mx-auto border-t border-gray-100 dark:border-white/5 mt-16 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-                <p className="text-xs text-gray-400">© 2024 {storeName}. All rights reserved.</p>
+                <p className="text-xs text-gray-400">© 2023 {storeName}. All rights reserved.</p>
                 <div className="flex gap-8">
                     <Link href="/privacy" className="text-xs text-gray-400 hover:text-primary">Privacy Policy</Link>
                     <Link href="/terms" className="text-xs text-gray-400 hover:text-primary">Terms of Service</Link>

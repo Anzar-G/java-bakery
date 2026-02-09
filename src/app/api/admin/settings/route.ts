@@ -58,7 +58,20 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: false, error: admin.error }, { status: admin.status })
         }
 
-        const keys = ['whatsapp_number', 'tax_rate', 'store_name', 'store_email', 'delivery_notes', 'pickup_notes']
+        const keys = [
+            'whatsapp_number',
+            'tax_rate',
+            'store_name',
+            'store_email',
+            'delivery_notes',
+            'pickup_notes',
+            'shipping_fee_jawa_tengah',
+            'shipping_fee_di_yogyakarta',
+            'shipping_fee_jawa_barat',
+            'shipping_fee_dki_jakarta',
+            'shipping_fee_banten',
+            'shipping_fee_jawa_timur',
+        ]
 
         const { data, error } = await admin.supabase.from('settings').select('key, value, description').in('key', keys)
 

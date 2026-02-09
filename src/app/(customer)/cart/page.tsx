@@ -1,18 +1,110 @@
+
 'use client'
 
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { ChevronRight, Trash2, Minus, Plus, Info, ShieldCheck, ArrowRight, ShoppingCart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useCartStore } from '@/store/useCartStore'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+
+type PublicSettings = {
+    tax_rate: number
+    shipping_fees?: {
+        jawa_tengah?: number
+        di_yogyakarta?: number
+        jawa_barat?: number
+        dki_jakarta?: number
+        banten?: number
+        jawa_timur?: number
+    }
+}
+
+const PROVINCE = {
+    JATENG: 'jawa_tengah',
+    JABAR: 'jawa_barat',
+    JATIM: 'jawa_timur',
+    DIY: 'di_yogyakarta',
+    DKI: 'dki_jakarta',
+    BANTEN: 'banten',
+    OTHER: 'other',
+} as const
+
+function computeShippingFee(
+    province: string,
+    fees?: {
+        jawa_tengah?: number
+        di_yogyakarta?: number
+        jawa_barat?: number
+        dki_jakarta?: number
+        banten?: number
+        jawa_timur?: number
+    }
+): { fee: number | null; label: string } {
+    const map = {
+        [PROVINCE.JATENG]: Number(fees?.jawa_tengah ?? 10_000),
+        [PROVINCE.DIY]: Number(fees?.di_yogyakarta ?? 10_000),
+        [PROVINCE.JABAR]: Number(fees?.jawa_barat ?? 13_000),
+        [PROVINCE.DKI]: Number(fees?.dki_jakarta ?? 13_000),
+        [PROVINCE.BANTEN]: Number(fees?.banten ?? 13_000),
+        [PROVINCE.JATIM]: Number(fees?.jawa_timur ?? 13_000),
+    } as const
+
+    if (province === PROVINCE.OTHER) return { fee: null, label: 'Ongkir (konfirmasi via WhatsApp)' }
+    if (!province) return { fee: 0, label: 'Ongkir' }
+
+    const fee = (map as any)[province]
+    if (typeof fee === 'number' && Number.isFinite(fee) && fee >= 0) return { fee, label: 'Ongkir' }
+    return { fee: 0, label: 'Ongkir' }
+}
 
 export default function CartPage() {
     const { items, removeItem, updateQuantity, getTotalPrice } = useCartStore()
+    const [settings, setSettings] = useState<PublicSettings>({ tax_rate: 0.11 })
+    const [province, setProvince] = useState('')
     const subtotal = getTotalPrice()
-    const tax = subtotal * 0.11
-    const total = subtotal + tax
+
+    useEffect(() => {
+        let cancelled = false
+
+        const run = async () => {
+            try {
+                const res = await fetch('/api/settings')
+                const json = await res.json()
+                if (!res.ok || !json?.success) return
+                if (cancelled) return
+
+                const raw = Number(json?.settings?.tax_rate)
+                const nextFees = (json?.settings?.shipping_fees ?? {}) as any
+                setSettings({
+                    tax_rate: Number.isFinite(raw) ? raw : 0.11,
+                    shipping_fees: typeof nextFees === 'object' ? nextFees : undefined,
+                })
+            } catch {
+                // ignore
+            }
+        }
+
+        run()
+
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
+    const taxRate = Number.isFinite(Number(settings.tax_rate)) ? Number(settings.tax_rate) : 0.11
+    const taxPercent = Math.round(taxRate * 100)
+    const shippingCalc = useMemo(() => computeShippingFee(province, settings.shipping_fees), [province, settings.shipping_fees])
+    const tax = useMemo(() => subtotal * taxRate, [subtotal, taxRate])
+    const total = useMemo(() => subtotal + tax + (typeof shippingCalc.fee === 'number' ? shippingCalc.fee : 0), [subtotal, tax, shippingCalc.fee])
 
     if (items.length === 0) {
         return (
@@ -109,6 +201,24 @@ export default function CartPage() {
                                 </div>
                             </div>
 
+                            <div className="mb-6 space-y-2">
+                                <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider block">Provinsi</label>
+                                <Select value={province} onValueChange={setProvince}>
+                                    <SelectTrigger className="h-11 border-[#f1eee9] dark:border-[#3a342a] bg-[#fbfaf9] dark:bg-[#1e1a14] rounded-lg text-sm">
+                                        <SelectValue placeholder="Pilih provinsi untuk hitung ongkir" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="jawa_tengah">Jawa Tengah</SelectItem>
+                                        <SelectItem value="di_yogyakarta">DI Yogyakarta</SelectItem>
+                                        <SelectItem value="jawa_barat">Jawa Barat</SelectItem>
+                                        <SelectItem value="dki_jakarta">DKI Jakarta</SelectItem>
+                                        <SelectItem value="banten">Banten</SelectItem>
+                                        <SelectItem value="jawa_timur">Jawa Timur</SelectItem>
+                                        <SelectItem value="other">Luar Pulau Jawa</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
                             <div className="space-y-3 pb-6 border-b border-dashed border-[#f1eee9] dark:border-[#3a342a]">
                                 <div className="flex justify-between text-base">
                                     <span className="text-[#8b775b]">Subtotal ({items.length} item)</span>
@@ -119,7 +229,13 @@ export default function CartPage() {
                                     <span className="font-medium text-green-600">GRATIS</span>
                                 </div>
                                 <div className="flex justify-between text-base">
-                                    <span className="text-[#8b775b]">Pajak (11%)</span>
+                                    <span className="text-[#8b775b]">{shippingCalc.label}</span>
+                                    <span className="font-medium">
+                                        {shippingCalc.fee === null ? 'Dibicarakan via WhatsApp' : `Rp ${Number(shippingCalc.fee).toLocaleString()}`}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between text-base">
+                                    <span className="text-[#8b775b]">Pajak ({taxPercent}%)</span>
                                     <span className="font-medium">Rp {tax.toLocaleString()}</span>
                                 </div>
                             </div>
@@ -132,7 +248,7 @@ export default function CartPage() {
                             </div>
 
                             <Button asChild className="w-full bg-primary text-white py-8 rounded-xl font-bold text-lg hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
-                                <Link href="/checkout">
+                                <Link href={province ? `/checkout?province=${encodeURIComponent(province)}` : '/checkout'}>
                                     Lanjut Checkout
                                     <ArrowRight className="w-5 h-5" />
                                 </Link>

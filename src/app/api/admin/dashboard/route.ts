@@ -50,20 +50,39 @@ export async function GET(request: NextRequest) {
             auth: { persistSession: false },
         })
 
-        const [{ count: ordersCount, error: ordersCountError }, { count: productsCount, error: productsCountError }, { count: customersCount, error: customersCountError }] = await Promise.all([
+        const [{ count: ordersCount, error: ordersCountError }, { count: productsCount, error: productsCountError }] = await Promise.all([
             supabase.from('orders').select('id', { count: 'exact', head: true }),
             supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_active', true),
-            supabase.from('customers').select('id', { count: 'exact', head: true }),
         ])
 
-        if (ordersCountError || productsCountError || customersCountError) {
+        if (ordersCountError || productsCountError) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: ordersCountError?.message ?? productsCountError?.message ?? customersCountError?.message ?? 'Failed to load stats',
+                    error: ordersCountError?.message ?? productsCountError?.message ?? 'Failed to load stats',
                 },
                 { status: 500 }
             )
+        }
+
+        const { data: customerRows, error: customersError } = await supabase
+            .from('orders')
+            .select('customer_phone, customer_email')
+
+        if (customersError) {
+            return NextResponse.json({ success: false, error: customersError.message }, { status: 500 })
+        }
+
+        const uniqueCustomers = new Set<string>()
+        for (const row of customerRows ?? []) {
+            const phone = String((row as any).customer_phone ?? '').trim()
+            if (phone) {
+                uniqueCustomers.add(`phone:${phone}`)
+                continue
+            }
+
+            const emailKey = String((row as any).customer_email ?? '').trim().toLowerCase()
+            if (emailKey) uniqueCustomers.add(`email:${emailKey}`)
         }
 
         const { data: revenueRows, error: revenueError } = await supabase
@@ -94,7 +113,7 @@ export async function GET(request: NextRequest) {
                 totalRevenue,
                 totalOrders: ordersCount ?? 0,
                 activeProducts: productsCount ?? 0,
-                totalCustomers: customersCount ?? 0,
+                totalCustomers: uniqueCustomers.size,
             },
             recentOrders: recentOrders ?? [],
         })

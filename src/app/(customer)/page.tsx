@@ -22,6 +22,7 @@ type BestSeller = {
   featured_image: string | null
   is_pre_order: boolean
   rating_average: number | null
+  order_count: number | null
 }
 
 function supabaseServer() {
@@ -50,9 +51,12 @@ export default async function HomePage() {
       .order('display_order', { ascending: true }),
     supabase
       .from('products')
-      .select('id, name, slug, base_price, description, featured_image, is_pre_order, rating_average')
+      .select('id, name, slug, base_price, description, featured_image, is_pre_order, rating_average, order_count')
       .eq('is_active', true)
+      .not('rating_average', 'is', null)
+      .gt('rating_average', 0)
       .order('rating_average', { ascending: false })
+      .order('order_count', { ascending: false })
       .limit(3),
   ])
 
@@ -169,7 +173,7 @@ export default async function HomePage() {
                 price: product.base_price,
                 description: product.description ?? '',
                 image: product.featured_image || fallbackImage(),
-                rating: 5, // Default rating as it's not in the best seller query currently
+                rating: product.rating_average ?? 0,
                 isPreOrder: product.is_pre_order,
                 badge: 'Best Seller'
               }}

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { ProductCard } from '@/components/product/ProductCard'
 import { Button } from '@/components/ui/button'
-import { ChevronRight, ChevronLeft } from 'lucide-react'
+import { ChevronRight, ChevronLeft, SlidersHorizontal, X } from 'lucide-react'
 import {
     Select,
     SelectContent,
@@ -11,9 +11,18 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { cn } from '@/lib/utils'
 
 interface CatalogProduct {
     id: string
@@ -35,9 +44,12 @@ interface CatalogCategory {
 export default function ProductsClient() {
     const router = useRouter()
     const searchParams = useSearchParams()
+    const q = (searchParams.get('q') ?? '').trim()
     const categorySlug = searchParams.get('category') ?? 'all'
     const availability = searchParams.get('availability') ?? 'all'
     const sort = searchParams.get('sort') ?? 'newest'
+
+    const [filtersOpen, setFiltersOpen] = useState(false)
 
     const [products, setProducts] = useState<CatalogProduct[]>([])
     const [categories, setCategories] = useState<CatalogCategory[]>([])
@@ -66,9 +78,13 @@ export default function ProductsClient() {
             let query = supabase
                 .from('products')
                 .select(
-                    'id, name, slug, description, base_price, featured_image, rating_average, is_pre_order, category:categories!products_category_id_fkey(slug)'
+                    'id, name, slug, description, base_price, featured_image, rating_average, is_pre_order, category:categories!products_category_id_fkey!inner(slug)'
                 )
                 .eq('is_active', true)
+
+            if (q) {
+                query = query.or(`name.ilike.%${q}%,description.ilike.%${q}%`)
+            }
 
             if (availability === 'preorder') {
                 query = query.eq('is_pre_order', true)
@@ -77,7 +93,7 @@ export default function ProductsClient() {
             }
 
             if (categorySlug !== 'all') {
-                query = query.eq('categories.slug', categorySlug)
+                query = query.eq('category.slug', categorySlug)
             }
 
             if (sort === 'price_low') {
@@ -101,7 +117,7 @@ export default function ProductsClient() {
         }
 
         fetchProducts()
-    }, [availability, categorySlug, sort])
+    }, [availability, categorySlug, q, sort])
 
     const setCategorySlug = (next: string) => {
         const params = new URLSearchParams(searchParams.toString())
@@ -127,6 +143,16 @@ export default function ProductsClient() {
     const clearAllFilters = () => {
         router.push('/products')
     }
+
+    const activeFiltersCount = (categorySlug !== 'all' ? 1 : 0) + (availability !== 'all' ? 1 : 0)
+
+    const chipClass = (active: boolean) =>
+        cn(
+            'h-9 rounded-full px-3 text-sm font-semibold',
+            active
+                ? 'bg-primary text-white hover:bg-primary/90'
+                : 'bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+        )
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -164,97 +190,117 @@ export default function ProductsClient() {
                 </div>
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-8">
-                <aside className="w-full lg:w-64 space-y-8">
-                    <div>
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white mb-4">Category</h3>
-                        <div className="space-y-2">
-                            <label className="flex items-center gap-3 cursor-pointer group">
-                                <input
-                                    type="radio"
-                                    checked={categorySlug === 'all'}
-                                    onChange={() => setCategorySlug('all')}
-                                    className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary"
-                                />
-                                <span className="text-slate-700 dark:text-slate-300 group-hover:text-primary transition-colors">All</span>
-                            </label>
-
-                            {categories.map((cat) => (
-                                <label key={cat.id} className="flex items-center gap-3 cursor-pointer group">
-                                    <input
-                                        type="radio"
-                                        checked={categorySlug === cat.slug}
-                                        onChange={() => setCategorySlug(cat.slug)}
-                                        className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary"
-                                    />
-                                    <span className="text-slate-700 dark:text-slate-300 group-hover:text-primary transition-colors">{cat.name}</span>
-                                </label>
-                            ))}
-                        </div>
+            <div className="space-y-6">
+                <div className="flex items-center justify-between gap-3">
+                    <div className="hidden lg:flex flex-1 items-center gap-2 overflow-x-auto">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mr-1">Category</span>
+                        <Button variant="ghost" className={chipClass(categorySlug === 'all')} onClick={() => setCategorySlug('all')}>
+                            All
+                        </Button>
+                        {categories.map((c) => (
+                            <Button key={c.id} variant="ghost" className={chipClass(categorySlug === c.slug)} onClick={() => setCategorySlug(c.slug)}>
+                                {c.name}
+                            </Button>
+                        ))}
                     </div>
 
-                    <div>
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white mb-4">Price Range</h3>
-                        <div className="px-2 space-y-4">
-                            <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full relative">
-                                <div className="absolute h-full w-2/3 bg-primary rounded-full left-0"></div>
-                                <div className="absolute top-1/2 left-0 -translate-y-1/2 w-4 h-4 bg-primary border-2 border-white dark:border-background-dark rounded-full shadow-md cursor-pointer"></div>
-                                <div className="absolute top-1/2 left-[66%] -translate-y-1/2 w-4 h-4 bg-primary border-2 border-white dark:border-background-dark rounded-full shadow-md cursor-pointer"></div>
-                            </div>
-                            <div className="flex justify-between items-center text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                <span>Rp 0</span>
-                                <span>Rp 200k+</span>
-                            </div>
-                        </div>
+                    <div className="hidden lg:flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Availability</span>
+                        <Button variant="ghost" className={chipClass(availability === 'all')} onClick={() => setAvailability('all')}>
+                            All
+                        </Button>
+                        <Button variant="ghost" className={chipClass(availability === 'available')} onClick={() => setAvailability('available')}>
+                            Ready
+                        </Button>
+                        <Button variant="ghost" className={chipClass(availability === 'preorder')} onClick={() => setAvailability('preorder')}>
+                            Pre-order
+                        </Button>
+
+                        {activeFiltersCount > 0 && (
+                            <Button variant="outline" className="h-9 rounded-full" onClick={clearAllFilters}>
+                                <X className="w-4 h-4" />
+                                Clear
+                            </Button>
+                        )}
                     </div>
 
-                    <div>
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white mb-4">Availability</h3>
-                        <div className="space-y-3">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="availability"
-                                    checked={availability === 'available'}
-                                    onChange={() => setAvailability('available')}
-                                    className="w-5 h-5 text-primary border-slate-300 focus:ring-primary"
-                                />
-                                <span className="text-slate-700 dark:text-slate-300">Available Now</span>
-                            </label>
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="availability"
-                                    checked={availability === 'preorder'}
-                                    onChange={() => setAvailability('preorder')}
-                                    className="w-5 h-5 text-primary border-slate-300 focus:ring-primary"
-                                />
-                                <span className="text-slate-700 dark:text-slate-300">Pre-Order Only</span>
-                            </label>
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="availability"
-                                    checked={availability === 'all'}
-                                    onChange={() => setAvailability('all')}
-                                    className="w-5 h-5 text-primary border-slate-300 focus:ring-primary"
-                                />
-                                <span className="text-slate-700 dark:text-slate-300">All Items</span>
-                            </label>
-                        </div>
+                    <div className="lg:hidden flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            className="h-10 rounded-full"
+                            onClick={() => setFiltersOpen(true)}
+                        >
+                            <SlidersHorizontal className="w-4 h-4" />
+                            Filter{activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ''}
+                        </Button>
+                        {activeFiltersCount > 0 && (
+                            <Button variant="outline" className="h-10 rounded-full" onClick={clearAllFilters}>
+                                <X className="w-4 h-4" />
+                            </Button>
+                        )}
                     </div>
+                </div>
 
-                    <Button
-                        onClick={clearAllFilters}
-                        variant="outline"
-                        className="w-full py-6 border-2 border-primary text-primary hover:bg-primary hover:text-white font-bold rounded-xl transition-all duration-200"
+                <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
+                    <DialogContent
+                        className="
+                            fixed right-0 top-0 h-[100dvh] w-[88vw] max-w-[420px]
+                            left-auto
+                            translate-x-0 translate-y-0 rounded-l-2xl rounded-r-none
+                            border-l border-slate-200 dark:border-slate-800
+                            p-0
+                            flex flex-col gap-0 overflow-hidden
+                        "
                     >
-                        Clear All Filters
-                    </Button>
-                </aside>
+                        <DialogHeader>
+                            <div className="p-6 pb-4 pt-10 pr-12">
+                                <DialogTitle>Filter</DialogTitle>
+                                <DialogDescription>Pilih kategori dan availability.</DialogDescription>
+                            </div>
+                        </DialogHeader>
 
-                <div className="flex-1">
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 md:gap-4 lg:gap-6">
+                        <div className="space-y-6 p-6 pt-0 flex-1 overflow-y-auto">
+                            <div className="space-y-3">
+                                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Category</div>
+                                <div className="flex flex-wrap gap-2">
+                                    <Button variant="ghost" className={chipClass(categorySlug === 'all')} onClick={() => setCategorySlug('all')}>
+                                        All
+                                    </Button>
+                                    {categories.map((c) => (
+                                        <Button key={c.id} variant="ghost" className={chipClass(categorySlug === c.slug)} onClick={() => setCategorySlug(c.slug)}>
+                                            {c.name}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Availability</div>
+                                <div className="flex flex-wrap gap-2">
+                                    <Button variant="ghost" className={chipClass(availability === 'all')} onClick={() => setAvailability('all')}>
+                                        All
+                                    </Button>
+                                    <Button variant="ghost" className={chipClass(availability === 'available')} onClick={() => setAvailability('available')}>
+                                        Ready
+                                    </Button>
+                                    <Button variant="ghost" className={chipClass(availability === 'preorder')} onClick={() => setAvailability('preorder')}>
+                                        Pre-order
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <DialogFooter className="p-6 pt-0">
+                            <Button variant="outline" onClick={clearAllFilters}>
+                                Clear
+                            </Button>
+                            <Button onClick={() => setFiltersOpen(false)}>Done</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-3 lg:gap-4">
                         {products.map((p) => (
                             <ProductCard
                                 key={p.id}
@@ -268,8 +314,8 @@ export default function ProductsClient() {
                                         p.featured_image ||
                                         'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=1000',
                                     badge: undefined,
-                                    rating: p.rating_average ?? 5,
-                                    isPreOrder: p.is_pre_order ?? true,
+                                    rating: p.rating_average ?? 0,
+                                    isPreOrder: p.is_pre_order ?? false,
                                 }}
                             />
                         ))}
