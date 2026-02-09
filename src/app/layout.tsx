@@ -9,6 +9,12 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase:
+    process.env.NEXT_PUBLIC_SITE_URL
+      ? new URL(process.env.NEXT_PUBLIC_SITE_URL)
+      : process.env.VERCEL_URL
+        ? new URL(`https://${process.env.VERCEL_URL}`)
+        : undefined,
   title: "Bakery Umi | Freshly Baked Happiness",
   description: "Aneka kue kering, brownies, donat, dan pizza homemade. Pre-order untuk kualitas terbaik.",
   icons: {
@@ -20,6 +26,24 @@ export const metadata: Metadata = {
     apple: [
       { url: '/favicon.png?v=1', type: 'image/png' },
     ],
+  },
+  openGraph: {
+    title: "Bakery Umi | Freshly Baked Happiness",
+    description: "Aneka kue kering, brownies, donat, dan pizza homemade. Pre-order untuk kualitas terbaik.",
+    images: [
+      {
+        url: '/favicon.png',
+        width: 1024,
+        height: 1024,
+        alt: 'Bakery Umi',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary',
+    title: "Bakery Umi | Freshly Baked Happiness",
+    description: "Aneka kue kering, brownies, donat, dan pizza homemade. Pre-order untuk kualitas terbaik.",
+    images: ['/favicon.png'],
   },
 };
 
