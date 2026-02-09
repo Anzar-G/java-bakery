@@ -235,7 +235,7 @@ export default function CartPage() {
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-base">
-                                    <span className="text-[#8b775b]">Pajak ({taxPercent}%)</span>
+                                    <span className="text-[#8b775b]">Biaya Layanan &amp; Penanganan ({taxPercent}%)</span>
                                     <span className="font-medium">Rp {tax.toLocaleString()}</span>
                                 </div>
                             </div>

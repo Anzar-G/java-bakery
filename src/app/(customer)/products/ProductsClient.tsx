@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { ProductCard } from '@/components/product/ProductCard'
 import { Button } from '@/components/ui/button'
 import { ChevronRight, ChevronLeft, SlidersHorizontal, X } from 'lucide-react'
@@ -48,6 +48,9 @@ export default function ProductsClient() {
     const categorySlug = searchParams.get('category') ?? 'all'
     const availability = searchParams.get('availability') ?? 'all'
     const sort = searchParams.get('sort') ?? 'newest'
+
+    const [page, setPage] = useState(1)
+    const [columns, setColumns] = useState(2)
 
     const [filtersOpen, setFiltersOpen] = useState(false)
 
@@ -119,6 +122,61 @@ export default function ProductsClient() {
         fetchProducts()
     }, [availability, categorySlug, q, sort])
 
+    useEffect(() => {
+        setPage(1)
+    }, [availability, categorySlug, q, sort])
+
+    useEffect(() => {
+        const computeColumns = () => {
+            const w = window.innerWidth
+            if (w >= 1280) return 6
+            if (w >= 1024) return 5
+            if (w >= 768) return 4
+            if (w >= 640) return 3
+            return 2
+        }
+
+        const update = () => setColumns(computeColumns())
+        update()
+        window.addEventListener('resize', update)
+        return () => window.removeEventListener('resize', update)
+    }, [])
+
+    const itemsPerPage = useMemo(() => Math.max(1, columns * 2), [columns])
+
+    const totalPages = useMemo(() => {
+        return Math.max(1, Math.ceil(products.length / itemsPerPage))
+    }, [products.length, itemsPerPage])
+
+    useEffect(() => {
+        if (page > totalPages) setPage(totalPages)
+    }, [page, totalPages])
+
+    const pagedProducts = useMemo(() => {
+        const start = (page - 1) * itemsPerPage
+        return products.slice(start, start + itemsPerPage)
+    }, [products, page, itemsPerPage])
+
+    const paginationRange = useMemo(() => {
+        if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
+        const set = new Set<number>()
+        set.add(1)
+        set.add(totalPages)
+        set.add(page)
+        if (page - 1 > 1) set.add(page - 1)
+        if (page + 1 < totalPages) set.add(page + 1)
+        if (page - 2 > 1) set.add(page - 2)
+        if (page + 2 < totalPages) set.add(page + 2)
+        return Array.from(set).sort((a, b) => a - b)
+    }, [page, totalPages])
+
+    const showingText = useMemo(() => {
+        if (products.length === 0) return 'Showing 0 items'
+        const start = (page - 1) * itemsPerPage + 1
+        const end = Math.min(products.length, page * itemsPerPage)
+        return `Showing ${start}-${end} of ${products.length} items`
+    }, [products.length, page, itemsPerPage])
+
     const setCategorySlug = (next: string) => {
         const params = new URLSearchParams(searchParams.toString())
         if (next === 'all') params.delete('category')
@@ -172,7 +230,7 @@ export default function ProductsClient() {
                         </ol>
                     </nav>
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Artisan Collection</h1>
-                    <p className="text-slate-500 dark:text-slate-400 mt-1">Showing 12 of 48 fresh baked items</p>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1">{showingText}</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider text-sm">Sort by:</span>
@@ -301,7 +359,7 @@ export default function ProductsClient() {
 
                 <div>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-3 lg:gap-4">
-                        {products.map((p) => (
+                        {pagedProducts.map((p) => (
                             <ProductCard
                                 key={p.id}
                                 product={{
@@ -321,48 +379,58 @@ export default function ProductsClient() {
                         ))}
                     </div>
 
-                    <div className="mt-12 flex justify-center items-center gap-4">
-                        <Button
-                            variant="ghost"
-                            disabled
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors disabled:opacity-30"
-                        >
-                            <ChevronLeft className="w-4 h-4" /> Previous
-                        </Button>
-                        <div className="flex items-center gap-2">
-                            <Button size="icon" className="w-10 h-10 rounded-lg bg-primary text-white font-bold">
-                                1
-                            </Button>
-                            <Button
-                                size="icon"
-                                variant="ghost"
-                                className="w-10 h-10 rounded-lg hover:bg-slate-200 dark:hover:bg-surface-dark font-bold text-slate-700 dark:text-slate-300 transition-colors"
-                            >
-                                2
-                            </Button>
-                            <Button
-                                size="icon"
-                                variant="ghost"
-                                className="w-10 h-10 rounded-lg hover:bg-slate-200 dark:hover:bg-surface-dark font-bold text-slate-700 dark:text-slate-300 transition-colors"
-                            >
-                                3
-                            </Button>
-                            <span className="px-2 text-slate-400">...</span>
-                            <Button
-                                size="icon"
-                                variant="ghost"
-                                className="w-10 h-10 rounded-lg hover:bg-slate-200 dark:hover:bg-surface-dark font-bold text-slate-700 dark:text-slate-300 transition-colors"
-                            >
-                                8
-                            </Button>
+                    {totalPages > 1 && (
+                        <div className="mt-12 flex justify-center items-center gap-4">
+                            {page > 1 ? (
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
+                                >
+                                    <ChevronLeft className="w-4 h-4" /> Previous
+                                </Button>
+                            ) : (
+                                <div className="w-[108px]" />
+                            )}
+
+                            <div className="flex items-center gap-2">
+                                {paginationRange.map((n, idx) => {
+                                    const prev = paginationRange[idx - 1]
+                                    const showEllipsis = prev !== undefined && n - prev > 1
+                                    return (
+                                        <React.Fragment key={n}>
+                                            {showEllipsis && <span className="px-2 text-slate-400">...</span>}
+                                            <Button
+                                                size="icon"
+                                                variant={page === n ? 'default' : 'ghost'}
+                                                onClick={() => setPage(n)}
+                                                className={cn(
+                                                    'w-10 h-10 rounded-lg font-bold transition-colors',
+                                                    page === n
+                                                        ? 'bg-primary text-white'
+                                                        : 'hover:bg-slate-200 dark:hover:bg-surface-dark text-slate-700 dark:text-slate-300'
+                                                )}
+                                            >
+                                                {n}
+                                            </Button>
+                                        </React.Fragment>
+                                    )
+                                })}
+                            </div>
+
+                            {page < totalPages ? (
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
+                                >
+                                    Next <ChevronRight className="w-4 h-4" />
+                                </Button>
+                            ) : (
+                                <div className="w-[108px]" />
+                            )}
                         </div>
-                        <Button
-                            variant="ghost"
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
-                        >
-                            Next <ChevronRight className="w-4 h-4" />
-                        </Button>
-                    </div>
+                    )}
                 </div>
             </div>
         </div>

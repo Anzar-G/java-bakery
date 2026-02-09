@@ -232,7 +232,7 @@ export default function OrderStatusPage() {
                             <h2 className="text-lg font-black mb-4">Ringkasan Pembayaran</h2>
                             <div className="space-y-2 text-sm">
                                 <div className="flex justify-between"><span className="text-[#8b775b]">Subtotal</span><span className="font-semibold">{formatIDR(data.order.subtotal)}</span></div>
-                                <div className="flex justify-between"><span className="text-[#8b775b]">Pajak</span><span className="font-semibold">{formatIDR(data.order.tax_amount)}</span></div>
+                                <div className="flex justify-between"><span className="text-[#8b775b]">Biaya Layanan &amp; Penanganan</span><span className="font-semibold">{formatIDR(data.order.tax_amount)}</span></div>
                                 <div className="flex justify-between"><span className="text-[#8b775b]">Ongkir</span><span className="font-semibold">{formatIDR(data.order.shipping_cost)}</span></div>
                                 <div className="flex justify-between"><span className="text-[#8b775b]">Diskon</span><span className="font-semibold">-{formatIDR(data.order.discount_amount)}</span></div>
                                 <div className="pt-4 mt-4 border-t border-dashed border-[#f1eee9] dark:border-[#3a342a] flex justify-between">

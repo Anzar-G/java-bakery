@@ -190,7 +190,7 @@ export default function CheckoutClient() {
     const computedTax = computedSubtotal * (Number(settings.tax_rate) || 0.11)
     const computedTotal = computedSubtotal + computedTax + (typeof shippingCalc.fee === 'number' ? shippingCalc.fee : 0)
 
-    const taxLabel = `Pajak (${Math.round((Number(settings.tax_rate) || 0.11) * 100)}%)`
+    const taxLabel = `Biaya Layanan & Penanganan (${Math.round((Number(settings.tax_rate) || 0.11) * 100)}%)`
 
     useEffect(() => {
         let cancelled = false
