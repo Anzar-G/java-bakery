@@ -2,7 +2,8 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { LayoutGrid, Search, ShoppingBasket, User } from 'lucide-react'
+import Image from 'next/image'
+import { LayoutGrid, Search, User } from 'lucide-react'
 import { useCartStore } from '@/store/useCartStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -148,8 +149,8 @@ export function Header() {
                 <div className="max-w-7xl mx-auto flex items-center justify-between px-4 py-2 h-[60px] gap-4">
                     {/* Logo - Hide on mobile if search needs space, or keep small */}
                     <Link href="/" className="flex items-center gap-2 group shrink-0">
-                        <div className="bg-[#EE4D2D] p-1.5 rounded-lg text-white">
-                            <ShoppingBasket className="w-5 h-5" />
+                        <div className="relative w-9 h-9 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white">
+                            <Image src="/favicon.png" alt={storeName} fill className="object-contain p-1" />
                         </div>
                         <h1 className="hidden md:block text-[#EE4D2D] text-lg font-extrabold tracking-tight">
                             {storeName}

@@ -11,6 +11,10 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "Bakery Umi | Freshly Baked Happiness",
   description: "Aneka kue kering, brownies, donat, dan pizza homemade. Pre-order untuk kualitas terbaik.",
+  icons: {
+    icon: '/favicon.png',
+    apple: '/favicon.png',
+  },
 };
 
 export default function RootLayout({

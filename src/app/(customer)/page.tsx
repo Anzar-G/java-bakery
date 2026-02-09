@@ -28,6 +28,19 @@ type BestSeller = {
   order_count: number | null
 }
 
+type PublicSettings = {
+  homepage?: {
+    hero_badge?: string
+    hero_title?: string
+    hero_subtitle?: string
+    hero_image_url?: string
+    categories_title?: string
+    categories_subtitle?: string
+    categories_cta?: string
+    best_sellers_title?: string
+  }
+}
+
 function supabaseServer() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -45,6 +58,15 @@ function fallbackImage() {
 
 export default async function HomePage() {
   const supabase = supabaseServer()
+
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+    ? String(process.env.NEXT_PUBLIC_SITE_URL).replace(/\/$/, '')
+    : ''
+
+  const settingsRes = await fetch(`${baseUrl}/api/settings`, { cache: 'no-store' }).catch(() => null)
+  const settingsJson = settingsRes ? await settingsRes.json().catch(() => null) : null
+  const publicSettings = (settingsJson?.success ? (settingsJson.settings as PublicSettings) : null) ?? null
+  const hp = publicSettings?.homepage ?? {}
 
   const [{ data: categoriesData }, { data: bestSellersData }] = await Promise.all([
     supabase
@@ -66,6 +88,19 @@ export default async function HomePage() {
   const categories = (categoriesData || []) as Category[]
   const bestSellers = ((bestSellersData || []) as BestSeller[]).filter((p) => Boolean(p?.id) && Boolean(p?.slug))
 
+  const heroBadge = (hp.hero_badge || 'Next Batch: Shipping this Friday').trim()
+  const heroTitle = (hp.hero_title || 'Freshly Baked Happiness, Delivered.').trim()
+  const heroSubtitle = (
+    hp.hero_subtitle ||
+    'Artisanal sourdough, fudgy brownies, and handmade pizza baked fresh in our home kitchen. Limited batches available weekly.'
+  ).trim()
+  const heroImageUrl = (hp.hero_image_url || '').trim()
+
+  const categoriesTitle = (hp.categories_title || 'Explore Categories').trim()
+  const categoriesSubtitle = (hp.categories_subtitle || 'Choose your favorite treat for the next batch').trim()
+  const categoriesCta = (hp.categories_cta || 'View All Categories').trim()
+  const bestSellersTitle = (hp.best_sellers_title || 'Best Sellers').trim()
+
   return (
     <div className="max-w-7xl mx-auto px-6 lg:px-20 overflow-hidden">
       {/* Hero Section */}
@@ -77,13 +112,13 @@ export default async function HomePage() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
               </span>
-              Next Batch: Shipping this Friday
+              {heroBadge}
             </div>
             <h2 className="text-5xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight text-deep-brown dark:text-white">
-              Freshly Baked <span className="text-primary italic">Happiness</span>, Delivered.
+              {heroTitle}
             </h2>
             <p className="text-lg text-deep-brown/70 dark:text-white/70 max-w-lg leading-relaxed">
-              Artisanal sourdough, fudgy brownies, and handmade pizza baked fresh in our home kitchen. Limited batches available weekly.
+              {heroSubtitle}
             </p>
             <div className="flex flex-wrap gap-4">
               <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-white px-8 py-6 rounded-xl font-bold text-lg shadow-lg shadow-primary/20 transition-all hover:-translate-y-1">
@@ -98,7 +133,7 @@ export default async function HomePage() {
             <div className="absolute inset-0 bg-primary/10 rounded-3xl -rotate-3"></div>
             <div className="relative w-full h-full rounded-3xl shadow-2xl overflow-hidden border-8 border-white dark:border-white/10">
               <Image
-                src={bestSellers[0]?.featured_image || fallbackImage()}
+                src={heroImageUrl || bestSellers[0]?.featured_image || fallbackImage()}
                 alt="Fresh sourdough bread and brownies"
                 fill
                 className="object-cover"
@@ -122,11 +157,11 @@ export default async function HomePage() {
       <section className="py-16">
         <div className="flex items-end justify-between mb-10">
           <div>
-            <h3 className="text-3xl font-extrabold mb-2">Explore Categories</h3>
-            <p className="text-deep-brown/60 dark:text-white/60">Choose your favorite treat for the next batch</p>
+            <h3 className="text-3xl font-extrabold mb-2">{categoriesTitle}</h3>
+            <p className="text-deep-brown/60 dark:text-white/60">{categoriesSubtitle}</p>
           </div>
           <Link href="/products" className="text-primary font-bold flex items-center gap-1 hover:underline underline-offset-4">
-            View All Categories
+            {categoriesCta}
           </Link>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
@@ -156,7 +191,7 @@ export default async function HomePage() {
       {bestSellers.length > 0 && (
         <section className="py-16 bg-primary/5 -mx-6 lg:-mx-20 px-6 lg:px-20 rounded-[2.5rem]">
           <div className="flex items-center justify-between mb-10">
-            <h3 className="text-3xl font-extrabold">Best Sellers</h3>
+            <h3 className="text-3xl font-extrabold">{bestSellersTitle}</h3>
             <div className="flex gap-2">
               <Button variant="outline" size="icon" className="rounded-full border-primary/20 hover:bg-primary hover:text-white">
                 <ChevronLeft className="w-5 h-5" />

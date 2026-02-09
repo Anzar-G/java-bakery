@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import Link from 'next/link'
-import { LayoutDashboard, ShoppingBag, Users, Settings, LogOut, Package, PieChart, Star, Menu } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, Users, Settings, LogOut, Package, PieChart, Star, Menu, Grid3X3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
@@ -34,6 +34,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { label: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
         { label: 'Orders', icon: ShoppingBag, href: '/admin/orders' },
         { label: 'Products', icon: Package, href: '/admin/products' },
+        { label: 'Categories', icon: Grid3X3, href: '/admin/categories' },
         { label: 'Customers', icon: Users, href: '/admin/customers' },
         { label: 'Reviews', icon: Star, href: '/admin/reviews' },
         { label: 'Analytics', icon: PieChart, href: '/admin/analytics' },

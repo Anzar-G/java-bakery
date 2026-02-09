@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ShoppingBasket, Mail, Phone, MapPin, Globe, MessageCircle } from 'lucide-react'
+import Image from 'next/image'
+import { Mail, Phone, MapPin, Globe, MessageCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -41,8 +42,8 @@ export function Footer() {
             <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
                 <div className="space-y-6">
                     <div className="flex items-center gap-3">
-                        <div className="bg-primary p-1.5 rounded-lg text-white">
-                            <ShoppingBasket className="w-5 h-5" />
+                        <div className="relative w-9 h-9 rounded-lg overflow-hidden border border-[#f1eee9] dark:border-[#3a342a] bg-white">
+                            <Image src="/favicon.png" alt={storeName} fill className="object-contain p-1" />
                         </div>
                         <h1 className="text-deep-brown dark:text-white text-xl font-extrabold">{storeName}</h1>
                     </div>

@@ -19,6 +19,14 @@ type SettingsResponse = {
     store_email: SettingRow
     delivery_notes: SettingRow
     pickup_notes: SettingRow
+    home_hero_badge: SettingRow
+    home_hero_title: SettingRow
+    home_hero_subtitle: SettingRow
+    home_hero_image_url: SettingRow
+    home_categories_title: SettingRow
+    home_categories_subtitle: SettingRow
+    home_categories_cta: SettingRow
+    home_best_sellers_title: SettingRow
     shipping_fee_jawa_tengah: SettingRow
     shipping_fee_di_yogyakarta: SettingRow
     shipping_fee_jawa_barat: SettingRow
@@ -32,6 +40,8 @@ export default function AdminSettingsPage() {
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string>('')
 
+    const [uploadingHero, setUploadingHero] = useState(false)
+
     const [values, setValues] = useState({
         whatsapp_number: '',
         tax_rate: '0.11',
@@ -39,6 +49,15 @@ export default function AdminSettingsPage() {
         store_email: '',
         delivery_notes: '',
         pickup_notes: '',
+        home_hero_badge: 'Next Batch: Shipping this Friday',
+        home_hero_title: 'Freshly Baked Happiness, Delivered.',
+        home_hero_subtitle:
+            'Artisanal sourdough, fudgy brownies, and handmade pizza baked fresh in our home kitchen. Limited batches available weekly.',
+        home_hero_image_url: '',
+        home_categories_title: 'Explore Categories',
+        home_categories_subtitle: 'Choose your favorite treat for the next batch',
+        home_categories_cta: 'View All Categories',
+        home_best_sellers_title: 'Best Sellers',
         shipping_fee_jawa_tengah: '10000',
         shipping_fee_di_yogyakarta: '10000',
         shipping_fee_jawa_barat: '13000',
@@ -46,6 +65,36 @@ export default function AdminSettingsPage() {
         shipping_fee_banten: '13000',
         shipping_fee_jawa_timur: '13000',
     })
+
+    const uploadHeroImage = async (file: File) => {
+        setUploadingHero(true)
+        try {
+            const form = new FormData()
+            form.append('file', file)
+            form.append('scope', 'home_hero')
+
+            const res = await fetch('/api/admin/uploads/site-image', {
+                method: 'POST',
+                body: form,
+            })
+
+            const json = await res.json().catch(() => null)
+            if (!res.ok || !json?.success) {
+                throw new Error(json?.error ?? 'Gagal upload gambar')
+            }
+
+            const url = String(json.url ?? '').trim()
+            if (!url) throw new Error('URL upload kosong')
+
+            setValues((p) => ({ ...p, home_hero_image_url: url }))
+            toast.success('Gambar hero berhasil diupload')
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Gagal upload gambar'
+            toast.error(message)
+        } finally {
+            setUploadingHero(false)
+        }
+    }
 
     const fetchSettings = async () => {
         setLoading(true)
@@ -68,6 +117,16 @@ export default function AdminSettingsPage() {
                 store_email: s.store_email?.value ?? '',
                 delivery_notes: s.delivery_notes?.value ?? '',
                 pickup_notes: s.pickup_notes?.value ?? '',
+                home_hero_badge: s.home_hero_badge?.value ?? 'Next Batch: Shipping this Friday',
+                home_hero_title: s.home_hero_title?.value ?? 'Freshly Baked Happiness, Delivered.',
+                home_hero_subtitle:
+                    s.home_hero_subtitle?.value ??
+                    'Artisanal sourdough, fudgy brownies, and handmade pizza baked fresh in our home kitchen. Limited batches available weekly.',
+                home_hero_image_url: s.home_hero_image_url?.value ?? '',
+                home_categories_title: s.home_categories_title?.value ?? 'Explore Categories',
+                home_categories_subtitle: s.home_categories_subtitle?.value ?? 'Choose your favorite treat for the next batch',
+                home_categories_cta: s.home_categories_cta?.value ?? 'View All Categories',
+                home_best_sellers_title: s.home_best_sellers_title?.value ?? 'Best Sellers',
                 shipping_fee_jawa_tengah: s.shipping_fee_jawa_tengah?.value ?? '10000',
                 shipping_fee_di_yogyakarta: s.shipping_fee_di_yogyakarta?.value ?? '10000',
                 shipping_fee_jawa_barat: s.shipping_fee_jawa_barat?.value ?? '13000',
@@ -125,6 +184,14 @@ export default function AdminSettingsPage() {
                         store_email: values.store_email,
                         delivery_notes: values.delivery_notes,
                         pickup_notes: values.pickup_notes,
+                        home_hero_badge: values.home_hero_badge,
+                        home_hero_title: values.home_hero_title,
+                        home_hero_subtitle: values.home_hero_subtitle,
+                        home_hero_image_url: values.home_hero_image_url,
+                        home_categories_title: values.home_categories_title,
+                        home_categories_subtitle: values.home_categories_subtitle,
+                        home_categories_cta: values.home_categories_cta,
+                        home_best_sellers_title: values.home_best_sellers_title,
                         shipping_fee_jawa_tengah: values.shipping_fee_jawa_tengah,
                         shipping_fee_di_yogyakarta: values.shipping_fee_di_yogyakarta,
                         shipping_fee_jawa_barat: values.shipping_fee_jawa_barat,
@@ -237,6 +304,97 @@ export default function AdminSettingsPage() {
                                 value={values.pickup_notes}
                                 onChange={(e) => setValues((p) => ({ ...p, pickup_notes: e.target.value }))}
                                 placeholder="Pickup by appointment."
+                            />
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="border-[#f1eee9] dark:border-[#3a342a] bg-white dark:bg-[#2a241c] rounded-2xl shadow-sm">
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">Homepage</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-1.5 md:col-span-2">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Hero Badge</label>
+                            <Input
+                                value={values.home_hero_badge}
+                                onChange={(e) => setValues((p) => ({ ...p, home_hero_badge: e.target.value }))}
+                                placeholder="Next Batch: Shipping this Friday"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5 md:col-span-2">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Hero Title</label>
+                            <Input
+                                value={values.home_hero_title}
+                                onChange={(e) => setValues((p) => ({ ...p, home_hero_title: e.target.value }))}
+                                placeholder="Freshly Baked Happiness, Delivered."
+                            />
+                        </div>
+
+                        <div className="space-y-1.5 md:col-span-2">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Hero Subtitle</label>
+                            <Input
+                                value={values.home_hero_subtitle}
+                                onChange={(e) => setValues((p) => ({ ...p, home_hero_subtitle: e.target.value }))}
+                                placeholder="Deskripsi singkat di bawah judul"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5 md:col-span-2">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Hero Image URL</label>
+                            <Input
+                                value={values.home_hero_image_url}
+                                onChange={(e) => setValues((p) => ({ ...p, home_hero_image_url: e.target.value }))}
+                                placeholder="https://..."
+                            />
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0]
+                                    if (file) uploadHeroImage(file)
+                                }}
+                                disabled={uploadingHero || saving || loading}
+                            />
+                            <p className="text-xs text-[#8b775b]">Kalau kosong, akan pakai gambar produk favorit / fallback.</p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Categories Title</label>
+                            <Input
+                                value={values.home_categories_title}
+                                onChange={(e) => setValues((p) => ({ ...p, home_categories_title: e.target.value }))}
+                                placeholder="Explore Categories"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Categories CTA</label>
+                            <Input
+                                value={values.home_categories_cta}
+                                onChange={(e) => setValues((p) => ({ ...p, home_categories_cta: e.target.value }))}
+                                placeholder="View All Categories"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5 md:col-span-2">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Categories Subtitle</label>
+                            <Input
+                                value={values.home_categories_subtitle}
+                                onChange={(e) => setValues((p) => ({ ...p, home_categories_subtitle: e.target.value }))}
+                                placeholder="Choose your favorite treat for the next batch"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-[#8b775b] uppercase tracking-wider">Best Sellers Title</label>
+                            <Input
+                                value={values.home_best_sellers_title}
+                                onChange={(e) => setValues((p) => ({ ...p, home_best_sellers_title: e.target.value }))}
+                                placeholder="Best Sellers"
                             />
                         </div>
                     </div>
