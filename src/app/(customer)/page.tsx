@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button'
 import { createClient } from '@supabase/supabase-js'
 import { ProductCard } from '@/components/product/ProductCard'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 type Category = {
   id: string
   name: string
@@ -61,7 +64,7 @@ export default async function HomePage() {
   ])
 
   const categories = (categoriesData || []) as Category[]
-  const bestSellers = (bestSellersData || []) as BestSeller[]
+  const bestSellers = ((bestSellersData || []) as BestSeller[]).filter((p) => Boolean(p?.id) && Boolean(p?.slug))
 
   return (
     <div className="max-w-7xl mx-auto px-6 lg:px-20 overflow-hidden">
@@ -150,37 +153,39 @@ export default async function HomePage() {
       </section>
 
       {/* Best Sellers */}
-      <section className="py-16 bg-primary/5 -mx-6 lg:-mx-20 px-6 lg:px-20 rounded-[2.5rem]">
-        <div className="flex items-center justify-between mb-10">
-          <h3 className="text-3xl font-extrabold">Best Sellers</h3>
-          <div className="flex gap-2">
-            <Button variant="outline" size="icon" className="rounded-full border-primary/20 hover:bg-primary hover:text-white">
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-            <Button variant="outline" size="icon" className="rounded-full border-primary/20 hover:bg-primary hover:text-white">
-              <ChevronRight className="w-5 h-5" />
-            </Button>
+      {bestSellers.length > 0 && (
+        <section className="py-16 bg-primary/5 -mx-6 lg:-mx-20 px-6 lg:px-20 rounded-[2.5rem]">
+          <div className="flex items-center justify-between mb-10">
+            <h3 className="text-3xl font-extrabold">Best Sellers</h3>
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon" className="rounded-full border-primary/20 hover:bg-primary hover:text-white">
+                <ChevronLeft className="w-5 h-5" />
+              </Button>
+              <Button variant="outline" size="icon" className="rounded-full border-primary/20 hover:bg-primary hover:text-white">
+                <ChevronRight className="w-5 h-5" />
+              </Button>
+            </div>
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 md:gap-6">
-          {bestSellers.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={{
-                id: product.id,
-                name: product.name,
-                slug: product.slug,
-                price: product.base_price,
-                description: product.description ?? '',
-                image: product.featured_image || fallbackImage(),
-                rating: product.rating_average ?? 0,
-                isPreOrder: product.is_pre_order,
-                badge: 'Best Seller'
-              }}
-            />
-          ))}
-        </div>
-      </section>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 md:gap-6">
+            {bestSellers.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={{
+                  id: product.id,
+                  name: product.name,
+                  slug: product.slug,
+                  price: product.base_price,
+                  description: product.description ?? '',
+                  image: product.featured_image || fallbackImage(),
+                  rating: product.rating_average ?? 0,
+                  isPreOrder: product.is_pre_order,
+                  badge: 'Best Seller'
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
