@@ -12,8 +12,14 @@ export const metadata: Metadata = {
   title: "Bakery Umi | Freshly Baked Happiness",
   description: "Aneka kue kering, brownies, donat, dan pizza homemade. Pre-order untuk kualitas terbaik.",
   icons: {
-    icon: '/favicon.png',
-    apple: '/favicon.png',
+    icon: [
+      { url: '/favicon.ico?v=1', type: 'image/x-icon' },
+      { url: '/favicon.png?v=1', type: 'image/png' },
+    ],
+    shortcut: ['/favicon.ico?v=1', '/favicon.png?v=1'],
+    apple: [
+      { url: '/favicon.png?v=1', type: 'image/png' },
+    ],
   },
 };
 
