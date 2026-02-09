@@ -72,6 +72,8 @@ export default function AdminProductsPage() {
     const [error, setError] = useState<string>('')
     const [products, setProducts] = useState<AdminProduct[]>([])
 
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
     const [categories, setCategories] = useState<AdminCategory[]>([])
 
     const [open, setOpen] = useState(false)
@@ -128,12 +130,60 @@ export default function AdminProductsPage() {
             }
 
             setProducts(Array.isArray(json.products) ? json.products : [])
+            setSelectedIds(new Set())
             setLoading(false)
         } catch (e) {
             const message = e instanceof Error ? e.message : 'Gagal memuat produk'
             setError(message)
             setProducts([])
+            setSelectedIds(new Set())
             setLoading(false)
+        }
+    }
+
+    const toggleSelected = (id: string, checked: boolean) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev)
+            if (checked) next.add(id)
+            else next.delete(id)
+            return next
+        })
+    }
+
+    const allSelected = useMemo(() => {
+        return products.length > 0 && products.every((p) => selectedIds.has(p.id))
+    }, [products, selectedIds])
+
+    const toggleAll = (checked: boolean) => {
+        setSelectedIds(() => {
+            if (!checked) return new Set()
+            return new Set(products.map((p) => p.id))
+        })
+    }
+
+    const bulkDelete = async () => {
+        const ids = Array.from(selectedIds)
+        if (ids.length === 0) return
+        const ok = confirm(`Hapus ${ids.length} produk terpilih?`)
+        if (!ok) return
+
+        try {
+            const res = await fetch('/api/admin/products', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids }),
+            })
+            const json = await res.json().catch(() => null)
+            if (!res.ok || !json?.success) {
+                throw new Error(json?.error ?? 'Gagal menghapus produk')
+            }
+
+            setProducts((prev) => prev.filter((p) => !selectedIds.has(p.id)))
+            setSelectedIds(new Set())
+            toast.success('Produk terpilih berhasil dihapus')
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Gagal menghapus produk'
+            toast.error(message)
         }
     }
 
@@ -559,6 +609,17 @@ export default function AdminProductsPage() {
                         <Plus className="w-4 h-4" />
                         Add Product
                     </Button>
+                    {selectedIds.size > 0 && (
+                        <Button
+                            onClick={bulkDelete}
+                            variant="outline"
+                            className="border-red-500/30 text-red-600 hover:bg-red-500/10"
+                            disabled={loading}
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Hapus Terpilih ({selectedIds.size})
+                        </Button>
+                    )}
                     <Button
                         onClick={fetchProducts}
                         variant="outline"
@@ -599,6 +660,13 @@ export default function AdminProductsPage() {
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="border-b border-[#f1eee9] dark:border-[#3a342a] text-[#8b775b] text-xs font-bold uppercase tracking-wider">
+                                    <th className="pb-4 w-10">
+                                        <input
+                                            type="checkbox"
+                                            checked={allSelected}
+                                            onChange={(e) => toggleAll(e.target.checked)}
+                                        />
+                                    </th>
                                     <th className="pb-4">Produk</th>
                                     <th className="pb-4">Kategori</th>
                                     <th className="pb-4">Harga</th>
@@ -609,7 +677,7 @@ export default function AdminProductsPage() {
                             <tbody className="divide-y divide-[#f1eee9] dark:divide-[#3a342a]">
                                 {loading && (
                                     <tr>
-                                        <td colSpan={5} className="py-8 text-center text-sm text-[#8b775b]">
+                                        <td colSpan={6} className="py-8 text-center text-sm text-[#8b775b]">
                                             Loading...
                                         </td>
                                     </tr>
@@ -617,7 +685,7 @@ export default function AdminProductsPage() {
 
                                 {!loading && products.length === 0 && (
                                     <tr>
-                                        <td colSpan={5} className="py-8 text-center text-sm text-[#8b775b]">
+                                        <td colSpan={6} className="py-8 text-center text-sm text-[#8b775b]">
                                             Belum ada produk.
                                         </td>
                                     </tr>
@@ -626,6 +694,13 @@ export default function AdminProductsPage() {
                                 {!loading &&
                                     products.map((p) => (
                                         <tr key={p.id} className="group hover:bg-primary/5 transition-all">
+                                            <td className="py-4">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedIds.has(p.id)}
+                                                    onChange={(e) => toggleSelected(p.id, e.target.checked)}
+                                                />
+                                            </td>
                                             <td className="py-4">
                                                 <p className="text-sm font-bold">{p.name}</p>
                                                 <p className="text-xs text-[#8b775b]">/{p.slug}</p>

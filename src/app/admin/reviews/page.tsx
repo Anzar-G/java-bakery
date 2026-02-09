@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { Check, Eye, RefreshCcw, Star, X } from 'lucide-react'
+import { Check, Eye, RefreshCcw, Star, Trash2, X } from 'lucide-react'
 
 type ReviewRow = {
     id: string
@@ -46,6 +46,8 @@ export default function AdminReviewsPage() {
     const [error, setError] = useState<string>('')
     const [reviews, setReviews] = useState<ReviewRow[]>([])
 
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
     const [open, setOpen] = useState(false)
     const [selected, setSelected] = useState<ReviewRow | null>(null)
     const [saving, setSaving] = useState(false)
@@ -64,12 +66,60 @@ export default function AdminReviewsPage() {
             }
 
             setReviews(Array.isArray(json.reviews) ? json.reviews : [])
+            setSelectedIds(new Set())
             setLoading(false)
         } catch (e) {
             const message = e instanceof Error ? e.message : 'Gagal memuat reviews'
             setError(message)
             setReviews([])
+            setSelectedIds(new Set())
             setLoading(false)
+        }
+    }
+
+    const toggleSelected = (id: string, checked: boolean) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev)
+            if (checked) next.add(id)
+            else next.delete(id)
+            return next
+        })
+    }
+
+    const allSelected = useMemo(() => {
+        return reviews.length > 0 && reviews.every((r) => selectedIds.has(r.id))
+    }, [reviews, selectedIds])
+
+    const toggleAll = (checked: boolean) => {
+        setSelectedIds(() => {
+            if (!checked) return new Set()
+            return new Set(reviews.map((r) => r.id))
+        })
+    }
+
+    const bulkDelete = async () => {
+        const ids = Array.from(selectedIds)
+        if (ids.length === 0) return
+        const ok = confirm(`Hapus ${ids.length} review terpilih?`)
+        if (!ok) return
+
+        try {
+            const res = await fetch('/api/admin/reviews', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids }),
+            })
+            const json = await res.json().catch(() => null)
+            if (!res.ok || !json?.success) {
+                throw new Error(json?.error ?? 'Gagal menghapus review')
+            }
+
+            setReviews((prev) => prev.filter((r) => !selectedIds.has(r.id)))
+            setSelectedIds(new Set())
+            toast.success('Review terpilih berhasil dihapus')
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Gagal menghapus review'
+            toast.error(message)
         }
     }
 
@@ -142,6 +192,18 @@ export default function AdminReviewsPage() {
                         </Select>
                     </div>
 
+                    {selectedIds.size > 0 && (
+                        <Button
+                            onClick={bulkDelete}
+                            variant="outline"
+                            className="border-red-500/30 text-red-600 hover:bg-red-500/10"
+                            disabled={loading || saving}
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Hapus Terpilih ({selectedIds.size})
+                        </Button>
+                    )}
+
                     <Button
                         onClick={fetchReviews}
                         variant="outline"
@@ -183,6 +245,13 @@ export default function AdminReviewsPage() {
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="border-b border-[#f1eee9] dark:border-[#3a342a] text-[#8b775b] text-xs font-bold uppercase tracking-wider">
+                                    <th className="pb-4 w-10">
+                                        <input
+                                            type="checkbox"
+                                            checked={allSelected}
+                                            onChange={(e) => toggleAll(e.target.checked)}
+                                        />
+                                    </th>
                                     <th className="pb-4">Product</th>
                                     <th className="pb-4">Rating</th>
                                     <th className="pb-4">Status</th>
@@ -193,13 +262,13 @@ export default function AdminReviewsPage() {
                             <tbody className="divide-y divide-[#f1eee9] dark:divide-[#3a342a]">
                                 {loading && (
                                     <tr>
-                                        <td colSpan={5} className="py-8 text-center text-sm text-[#8b775b]">Loading...</td>
+                                        <td colSpan={6} className="py-8 text-center text-sm text-[#8b775b]">Loading...</td>
                                     </tr>
                                 )}
 
                                 {!loading && reviews.length === 0 && (
                                     <tr>
-                                        <td colSpan={5} className="py-8 text-center text-sm text-[#8b775b]">Belum ada review.</td>
+                                        <td colSpan={6} className="py-8 text-center text-sm text-[#8b775b]">Belum ada review.</td>
                                     </tr>
                                 )}
 
@@ -208,6 +277,13 @@ export default function AdminReviewsPage() {
                                         const p = normalizeProduct(r.product)
                                         return (
                                             <tr key={r.id} className="group hover:bg-primary/5 transition-all">
+                                                <td className="py-4">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedIds.has(r.id)}
+                                                        onChange={(e) => toggleSelected(r.id, e.target.checked)}
+                                                    />
+                                                </td>
                                                 <td className="py-4">
                                                     <p className="text-sm font-bold">{p?.name ?? '-'}</p>
                                                     <p className="text-xs text-[#8b775b]">{p?.slug ? `/products/${p.slug}` : ''}</p>

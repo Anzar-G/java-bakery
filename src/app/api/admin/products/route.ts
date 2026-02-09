@@ -165,11 +165,23 @@ export async function DELETE(request: NextRequest) {
         }
 
         const id = request.nextUrl.searchParams.get('id') ?? ''
-        if (!id.trim()) {
-            return NextResponse.json({ success: false, error: 'Missing product id.' }, { status: 400 })
+        if (id.trim()) {
+            const { error } = await admin.supabase.from('products').delete().eq('id', id)
+            if (error) {
+                return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+            }
+
+            return NextResponse.json({ success: true })
         }
 
-        const { error } = await admin.supabase.from('products').delete().eq('id', id)
+        const body = (await request.json().catch(() => null)) as null | { ids?: unknown }
+        const ids = Array.isArray(body?.ids) ? body?.ids : []
+        const safeIds = ids.map((x) => String(x ?? '').trim()).filter(Boolean)
+        if (safeIds.length === 0) {
+            return NextResponse.json({ success: false, error: 'Missing product id(s).' }, { status: 400 })
+        }
+
+        const { error } = await admin.supabase.from('products').delete().in('id', safeIds)
         if (error) {
             return NextResponse.json({ success: false, error: error.message }, { status: 500 })
         }

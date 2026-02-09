@@ -153,3 +153,29 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ success: false, error: message }, { status: 500 })
     }
 }
+
+export async function DELETE(request: NextRequest) {
+    try {
+        const admin = await assertAdmin(request)
+        if (!admin.ok) {
+            return NextResponse.json({ success: false, error: admin.error }, { status: admin.status })
+        }
+
+        const body = (await request.json().catch(() => null)) as null | { ids?: unknown }
+        const ids = Array.isArray(body?.ids) ? body?.ids : []
+        const safeIds = ids.map((x) => String(x ?? '').trim()).filter(Boolean)
+        if (safeIds.length === 0) {
+            return NextResponse.json({ success: false, error: 'Missing review id(s).' }, { status: 400 })
+        }
+
+        const { error } = await admin.supabase.from('reviews').delete().in('id', safeIds)
+        if (error) {
+            return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+        }
+
+        return NextResponse.json({ success: true })
+    } catch (e) {
+        const message = e instanceof Error ? e.message : 'Unknown error'
+        return NextResponse.json({ success: false, error: message }, { status: 500 })
+    }
+}

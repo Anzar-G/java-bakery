@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { RefreshCcw, Users } from 'lucide-react'
+import { RefreshCcw, Trash2, Users } from 'lucide-react'
+import { toast } from 'sonner'
 
 type CustomerRow = {
     customer_name: string
@@ -27,6 +28,8 @@ export default function AdminCustomersPage() {
     const [customers, setCustomers] = useState<CustomerRow[]>([])
     const [query, setQuery] = useState('')
 
+    const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set())
+
     const fetchCustomers = async () => {
         setLoading(true)
         setError('')
@@ -42,13 +45,24 @@ export default function AdminCustomersPage() {
             }
 
             setCustomers(Array.isArray(json.customers) ? json.customers : [])
+            setSelectedPhones(new Set())
             setLoading(false)
         } catch (e) {
             const message = e instanceof Error ? e.message : 'Gagal memuat customers'
             setError(message)
             setCustomers([])
+            setSelectedPhones(new Set())
             setLoading(false)
         }
+    }
+
+    const toggleSelected = (phone: string, checked: boolean) => {
+        setSelectedPhones((prev) => {
+            const next = new Set(prev)
+            if (checked) next.add(phone)
+            else next.delete(phone)
+            return next
+        })
     }
 
     useEffect(() => {
@@ -68,6 +82,49 @@ export default function AdminCustomersPage() {
         })
     }, [customers, query])
 
+    const allSelected = useMemo(() => {
+        return filtered.length > 0 && filtered.every((c) => selectedPhones.has(c.customer_phone))
+    }, [filtered, selectedPhones])
+
+    const toggleAll = (checked: boolean) => {
+        setSelectedPhones((prev) => {
+            const next = new Set(prev)
+            if (!checked) {
+                for (const c of filtered) next.delete(c.customer_phone)
+                return next
+            }
+
+            for (const c of filtered) next.add(c.customer_phone)
+            return next
+        })
+    }
+
+    const bulkDelete = async () => {
+        const phones = Array.from(selectedPhones)
+        if (phones.length === 0) return
+        const ok = confirm(`Hapus semua order untuk ${phones.length} customer terpilih?`)
+        if (!ok) return
+
+        try {
+            const res = await fetch('/api/admin/customers', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phones }),
+            })
+            const json = await res.json().catch(() => null)
+            if (!res.ok || !json?.success) {
+                throw new Error(json?.error ?? 'Gagal menghapus orders customer')
+            }
+
+            setCustomers((prev) => prev.filter((c) => !selectedPhones.has(c.customer_phone)))
+            setSelectedPhones(new Set())
+            toast.success('Orders customer terpilih berhasil dihapus')
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Gagal menghapus orders customer'
+            toast.error(message)
+        }
+    }
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -75,14 +132,27 @@ export default function AdminCustomersPage() {
                     <h1 className="text-2xl font-black">Customers</h1>
                     <p className="text-[#8b775b]">Daftar pelanggan berdasarkan data order.</p>
                 </div>
-                <Button
-                    onClick={fetchCustomers}
-                    variant="outline"
-                    className="border-primary/20 text-primary hover:bg-primary/10"
-                >
-                    <RefreshCcw className="w-4 h-4" />
-                    Refresh
-                </Button>
+                <div className="flex items-center gap-3">
+                    {selectedPhones.size > 0 && (
+                        <Button
+                            onClick={bulkDelete}
+                            variant="outline"
+                            className="border-red-500/30 text-red-600 hover:bg-red-500/10"
+                            disabled={loading}
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Hapus Terpilih ({selectedPhones.size})
+                        </Button>
+                    )}
+                    <Button
+                        onClick={fetchCustomers}
+                        variant="outline"
+                        className="border-primary/20 text-primary hover:bg-primary/10"
+                    >
+                        <RefreshCcw className="w-4 h-4" />
+                        Refresh
+                    </Button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -127,6 +197,13 @@ export default function AdminCustomersPage() {
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="border-b border-[#f1eee9] dark:border-[#3a342a] text-[#8b775b] text-xs font-bold uppercase tracking-wider">
+                                    <th className="pb-4 w-10">
+                                        <input
+                                            type="checkbox"
+                                            checked={allSelected}
+                                            onChange={(e) => toggleAll(e.target.checked)}
+                                        />
+                                    </th>
                                     <th className="pb-4">Customer</th>
                                     <th className="pb-4">Phone</th>
                                     <th className="pb-4">Email</th>
@@ -138,7 +215,7 @@ export default function AdminCustomersPage() {
                             <tbody className="divide-y divide-[#f1eee9] dark:divide-[#3a342a]">
                                 {loading && (
                                     <tr>
-                                        <td colSpan={6} className="py-8 text-center text-sm text-[#8b775b]">
+                                        <td colSpan={7} className="py-8 text-center text-sm text-[#8b775b]">
                                             Loading...
                                         </td>
                                     </tr>
@@ -146,7 +223,7 @@ export default function AdminCustomersPage() {
 
                                 {!loading && filtered.length === 0 && (
                                     <tr>
-                                        <td colSpan={6} className="py-8 text-center text-sm text-[#8b775b]">
+                                        <td colSpan={7} className="py-8 text-center text-sm text-[#8b775b]">
                                             Belum ada customer.
                                         </td>
                                     </tr>
@@ -155,6 +232,13 @@ export default function AdminCustomersPage() {
                                 {!loading &&
                                     filtered.map((c) => (
                                         <tr key={c.customer_phone} className="group hover:bg-primary/5 transition-all">
+                                            <td className="py-4">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedPhones.has(c.customer_phone)}
+                                                    onChange={(e) => toggleSelected(c.customer_phone, e.target.checked)}
+                                                />
+                                            </td>
                                             <td className="py-4">
                                                 <p className="text-sm font-bold">{c.customer_name || '-'}</p>
                                             </td>

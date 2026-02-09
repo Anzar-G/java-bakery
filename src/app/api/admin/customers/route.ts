@@ -123,3 +123,29 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: false, error: message }, { status: 500 })
     }
 }
+
+export async function DELETE(request: NextRequest) {
+    try {
+        const admin = await assertAdmin(request)
+        if (!admin.ok) {
+            return NextResponse.json({ success: false, error: admin.error }, { status: admin.status })
+        }
+
+        const body = (await request.json().catch(() => null)) as null | { phones?: unknown }
+        const phones = Array.isArray(body?.phones) ? body?.phones : []
+        const safePhones = phones.map((x) => String(x ?? '').trim()).filter(Boolean)
+        if (safePhones.length === 0) {
+            return NextResponse.json({ success: false, error: 'Missing customer phone(s).' }, { status: 400 })
+        }
+
+        const { error } = await admin.supabase.from('orders').delete().in('customer_phone', safePhones)
+        if (error) {
+            return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+        }
+
+        return NextResponse.json({ success: true })
+    } catch (e) {
+        const message = e instanceof Error ? e.message : 'Unknown error'
+        return NextResponse.json({ success: false, error: message }, { status: 500 })
+    }
+}
